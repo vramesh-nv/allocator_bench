@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "va_allocator_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,7 +13,7 @@ extern "C" {
 typedef struct va_allocator va_allocator_t;
 
 // Function declarations
-va_allocator_t* va_allocator_init(void);
+va_allocator_t* va_allocator_init(va_allocator_type_t type);
 void va_allocator_destroy(va_allocator_t *allocator);
 uint64_t va_alloc(va_allocator_t *allocator, uint64_t size);
 void va_free(va_allocator_t *allocator, uint64_t addr);

@@ -18,6 +18,7 @@ set_target_properties(radix PROPERTIES LINKER_LANGUAGE C)
 # Create static library for VA allocator
 add_library(va_allocator STATIC
     va_allocator.c
+    va_allocator_default.c
 )
 set_target_properties(va_allocator PROPERTIES LINKER_LANGUAGE C)
 

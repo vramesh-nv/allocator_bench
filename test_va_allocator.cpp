@@ -4,7 +4,7 @@
 #include "va_allocator.h"
 
 void test_basic_allocation(void) {
-    va_allocator_t *allocator = va_allocator_init();
+    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
     assert(allocator != NULL);
 
     // Test basic allocation
@@ -20,7 +20,7 @@ void test_basic_allocation(void) {
 }
 
 void test_fragmentation(void) {
-    va_allocator_t *allocator = va_allocator_init();
+    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
     assert(allocator != NULL);
 
     // Allocate several blocks
@@ -52,7 +52,7 @@ void test_fragmentation(void) {
 }
 
 void test_severe_fragmentation(void) {
-    va_allocator_t *allocator = va_allocator_init();
+    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
     assert(allocator != NULL);
 
     const uint64_t total_va = va_allocator_get_total_size(allocator);
