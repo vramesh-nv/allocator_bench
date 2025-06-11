@@ -23,8 +23,8 @@ typedef struct {
 } va_allocator_default_t;
 
 // Helper function to print the va blocks
-void
-print_default_blocks(void *impl) {
+static void
+default_allocator_print(void *impl) {
     va_allocator_default_t *default_impl = (va_allocator_default_t *)impl;
     va_block_t *current = default_impl->addr_list;
     while (current) {
@@ -188,6 +188,7 @@ get_default_allocator_ops(void) {
         .free = default_free,
         .get_total_size = default_get_total_size,
         .get_used_size = default_get_used_size,
+        .print = default_allocator_print,
         .destroy = default_destroy,
         .impl = NULL
     };

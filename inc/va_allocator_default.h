@@ -9,6 +9,4 @@
 va_allocator_ops_t *get_default_allocator_ops(void);
 void *init_default_allocator(void);
 
-void print_default_blocks(void* impl);
-
 #endif // VA_ALLOCATOR_DEFAULT_H 

@@ -60,6 +60,14 @@ arena_destroy(void *impl)
     return;
 }
 
+static void
+arena_allocator_print(void *impl)
+{
+    UNUSED(impl);
+    //va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    return;
+}
+
 // Function to get the default implementation operations
 va_allocator_ops_t *
 get_arena_allocator_ops(void)
@@ -69,6 +77,7 @@ get_arena_allocator_ops(void)
         .free = arena_free,
         .get_total_size = arena_get_total_size,
         .get_used_size = arena_get_used_size,
+        .print = arena_allocator_print,
         .destroy = arena_destroy,
         .impl = NULL
     };

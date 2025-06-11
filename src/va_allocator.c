@@ -83,12 +83,9 @@ va_allocator_get_used_size(va_allocator_t *allocator) {
 }
 
 void
-print_all_blocks(va_allocator_t *allocator) {
+va_allocator_print(va_allocator_t *allocator) {
     if (!allocator || !allocator->ops || !allocator->ops->impl) {
         return;
     }
-    // This function is only valid for the default allocator
-    // You may want to add a type check here if supporting multiple allocators
-    extern void print_default_blocks(void* impl); // Forward declaration
-    print_default_blocks(allocator->ops->impl);
+    allocator->ops->print(allocator->ops->impl);
 }

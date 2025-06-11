@@ -15,6 +15,7 @@ typedef uint64_t (*va_alloc_fn)(void* impl, uint64_t size);
 typedef void (*va_free_fn)(void* impl, uint64_t addr);
 typedef uint64_t (*va_get_total_size_fn)(void* impl);
 typedef uint64_t (*va_get_used_size_fn)(void* impl);
+typedef void (*va_print_fn)(void* impl);
 typedef void (*va_destroy_fn)(void* impl);
 
 // Structure containing function pointers for allocator operations
@@ -23,6 +24,7 @@ typedef struct {
     va_free_fn free;
     va_get_total_size_fn get_total_size;
     va_get_used_size_fn get_used_size;
+    va_print_fn print;
     va_destroy_fn destroy;
     void* impl;  // Implementation-specific data
 } va_allocator_ops_t;
