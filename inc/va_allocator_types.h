@@ -6,7 +6,7 @@
 // Allocator implementation types
 typedef enum {
     VA_ALLOCATOR_TYPE_DEFAULT,  // Current implementation
-    VA_ALLOCATOR_TYPE_ALT,      // Future alternative implementation
+    VA_ALLOCATOR_TYPE_ARENA,    // Arena allocator implementation
     // Add more types as needed
 } va_allocator_type_t;
 

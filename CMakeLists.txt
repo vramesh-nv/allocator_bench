@@ -25,6 +25,7 @@ set_target_properties(radix PROPERTIES LINKER_LANGUAGE C)
 add_library(va_allocator STATIC
     src/va_allocator.c
     src/va_allocator_default.c
+    src/va_allocator_arenas.c
 )
 set_target_properties(va_allocator PROPERTIES LINKER_LANGUAGE C)
 

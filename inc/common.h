@@ -13,4 +13,6 @@
 #define container_of(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
+#define UNUSED(x) (void)(x)
+
 #endif // COMMON_H
