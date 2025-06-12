@@ -175,7 +175,7 @@ default_destroy(void *impl) {
         current = next;
     }
     if (default_impl->addr_list) {
-        munmap((void *)default_impl->addr_list->start_addr, default_impl->total_va_size);
+        FREE_VA((void *)default_impl->addr_list->start_addr, default_impl->total_va_size);
     }
     free(default_impl);
 }
@@ -206,9 +206,8 @@ init_default_allocator(void) {
     impl->total_va_size = VA_RESERVATION_SIZE;
     impl->used_va_size = 0;
     impl->addr_list = NULL;
-    radixTreeInit(&impl->size_tree, 64);  // Use 64 bits for size keys
-    void *va_base = mmap(NULL, VA_RESERVATION_SIZE, PROT_NONE, 
-                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    radixTreeInit(&impl->size_tree, 63);  // Use 63 bits for size keys
+    void *va_base = RESERVE_VA(VA_RESERVATION_SIZE);
     if (va_base == MAP_FAILED) {
         free(impl);
         return NULL;

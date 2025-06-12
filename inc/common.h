@@ -15,4 +15,7 @@
 
 #define UNUSED(x) (void)(x)
 
+#define RESERVE_VA(size) mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0)
+#define FREE_VA(addr, size) munmap(addr, size)
+
 #endif // COMMON_H

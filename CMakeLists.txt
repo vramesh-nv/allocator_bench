@@ -43,6 +43,14 @@ target_link_libraries(test_va_allocator PRIVATE
     radix
 )
 
+# Create performance test executable
+add_executable(test_va_allocator_perf tests/test_va_allocator_perf.cpp)
+target_link_libraries(test_va_allocator_perf PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
-add_test(NAME va_allocator_test COMMAND test_va_allocator) 
+add_test(NAME va_allocator_test COMMAND test_va_allocator)
+add_test(NAME va_allocator_perf_test COMMAND test_va_allocator_perf) 

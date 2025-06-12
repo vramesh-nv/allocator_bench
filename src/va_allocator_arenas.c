@@ -8,7 +8,6 @@ typedef struct {
     uint64_t used_va_size;      // Currently used VA space
 } va_allocator_arenas_t;
 
-
 // TODO: Fill up the dummy implementation
 static uint64_t
 arena_alloc(void *impl, uint64_t size)
