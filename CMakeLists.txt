@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set compiler flags - treat warnings as errors
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -Wno-error=shift-negative-value")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wno-error=shift-negative-value")
 
 # Add include directories
 include_directories(
@@ -18,6 +18,7 @@ include_directories(
 # Create static library for radix tree
 add_library(radix STATIC
     utils/radix.c
+    utils/bitvector.c
 )
 set_target_properties(radix PROPERTIES LINKER_LANGUAGE C)
 

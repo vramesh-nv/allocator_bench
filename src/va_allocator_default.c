@@ -96,10 +96,13 @@ default_alloc(void *impl, uint64_t size) {
         new_block->addr_next = NULL;
         new_block->addr_prev = NULL;
 
+        // Update the best fit block's size to reflect this split
         best_fit->size = size;
         insert_addr_list(default_impl, new_block);
         radixTreeInsert(&default_impl->size_tree, &new_block->radix_node, new_block->size);
     }
+
+    // Mark the best fit block as in use
     best_fit->is_free = 0;
     default_impl->used_va_size += best_fit->size;
     radixTreeRemove(&best_fit->radix_node);
@@ -207,7 +210,7 @@ init_default_allocator(void) {
     impl->used_va_size = 0;
     impl->addr_list = NULL;
     radixTreeInit(&impl->size_tree, 63);  // Use 63 bits for size keys
-    void *va_base = RESERVE_VA(VA_RESERVATION_SIZE);
+    void *va_base = RESERVE_VA(impl->total_va_size);
     if (va_base == MAP_FAILED) {
         free(impl);
         return NULL;
@@ -215,7 +218,7 @@ init_default_allocator(void) {
 
     va_block_t *initial_block = calloc(1, sizeof(va_block_t));
     if (!initial_block) {
-        munmap(va_base, VA_RESERVATION_SIZE);
+        FREE_VA(va_base, impl->total_va_size);
         free(impl);
         return NULL;
     }
@@ -225,7 +228,6 @@ init_default_allocator(void) {
     initial_block->is_free = 1;
     initial_block->addr_next = NULL;
     initial_block->addr_prev = NULL;
-    //memset(&initial_block->radix_node, 0, sizeof(CUradixNode));
     impl->addr_list = initial_block;
     radixTreeInsert(&impl->size_tree, &initial_block->radix_node, VA_RESERVATION_SIZE);
     return impl;

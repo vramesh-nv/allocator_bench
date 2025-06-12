@@ -14,6 +14,8 @@
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
 #define UNUSED(x) (void)(x)
+#define PTR2UINT(v)((uintptr_t)(const void*)(v))
+#define UINT2PTR(v)((void*)(uintptr_t)(v))
 
 #define RESERVE_VA(size) mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0)
 #define FREE_VA(addr, size) munmap(addr, size)
