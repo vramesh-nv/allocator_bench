@@ -4,9 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Mock CU_ASSERT for testing
-#define CU_ASSERT(expr) do { if (!(expr)) { printf("Assertion failed: %s\n", #expr); exit(1); } } while(0)
-
 static inline CUradixNode * 
 radixTreeGetSmallerChild(CUradixNode *node)
 {

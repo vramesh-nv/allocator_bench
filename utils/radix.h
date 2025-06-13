@@ -1,19 +1,11 @@
 #ifndef __RADIX_H__
 #define __RADIX_H__
 
-#include <stdint.h>
+#include "utils_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Type definitions
-typedef uint64_t NvU64;
-typedef uint32_t NvU32;
-typedef int NvBool;
-
-// Export macro
-#define CUDA_TEST_EXPORT
 
 typedef struct CUradixNode_st CUradixNode;
 typedef struct CUradixTree_st CUradixTree;

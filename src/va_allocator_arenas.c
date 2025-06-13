@@ -30,6 +30,12 @@ typedef struct arena_reservation {
     arena_reservation_t *next;
 } arena_reservation_t;
 
+typedef struct arena_object {
+    uint64_t addr;
+    uint64_t size;
+    arena_reservation_t *reservation;
+} arena_object_t;
+
 typedef struct arena {
     arena_info_t info;
     uint64_t idx;
@@ -68,6 +74,12 @@ arena_info_t arena_info_table[NUM_ARENAS] = {
     {~0UL, PHYSICAL_MEMORY_SIZE}
 };
 
+//
+// Again, this is arbitrary.
+//
+static inline int
+is_arena_idx_slab(uint64_t arena_idx) { return (arena_idx < 3) ? 1 : 0; }
+
 static uint64_t
 get_arena_idx_for_size(uint64_t size)
 {
@@ -82,14 +94,7 @@ get_arena_idx_for_size(uint64_t size)
     return NUM_ARENAS;
 }
 
-//
-// Again, this is arbitrary.
-//
-static inline int
-is_arena_idx_slab(uint64_t arena_idx)
-{
-    return (arena_idx < 3) ? 1 : 0;
-}
+
 
 #if 0
 static void
@@ -150,8 +155,22 @@ allocate_from_slab(slab_info_t *slab_info)
     return (slab_info->parent_reservation->addr + (slab_info->block_size * bit));
 }
 
+#if 0
+static void
+free_to_slab(slab_info_t *slab_info, uint64_t addr)
+{
+    assert(slab_info);
+    assert(addr >= slab_info->parent_reservation->addr);
+    assert(addr < (slab_info->parent_reservation->addr + slab_info->parent_reservation->size));
+
+    uint64_t bit = (addr - slab_info->parent_reservation->addr) / slab_info->block_size;
+    cubitvectorClearBit(slab_info->bitmap, bit);
+    slab_info->free_blocks++;
+}
+#endif
+
 static arena_reservation_t *
-create_new_reservation(arena_t *arena)
+create_reservation(arena_t *arena)
 {
     assert(arena);
     arena_reservation_t *reservation = (arena_reservation_t *)calloc(1, sizeof(*reservation));
@@ -169,19 +188,14 @@ create_new_reservation(arena_t *arena)
     reservation->size = arena->info.reservation_size;
     reservation->parent_arena = arena;
 
-    if (arena->is_slab) {
-        // Slab allocation
-        slab_info_t *slab_info = initialize_slab(reservation);
-        if (!slab_info) {
-            FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
-            free(reservation);
-            return NULL;
-        }
-        reservation->strategy = slab_info;
-    } else {
-        // Arena allocation
+    void *strategy = (arena->is_slab) ? (void *)initialize_slab(reservation) : NULL;
+    if (!strategy) {
+        FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
+        free(reservation);
+        return NULL;
     }
 
+    reservation->strategy = strategy;
     return reservation;
 }
 
@@ -214,7 +228,7 @@ allocate_from_arena(arena_t *arena)
         reservation = reservation->next;
     }
 
-    reservation = create_new_reservation(arena);
+    reservation = create_reservation(arena);
     if (!reservation) {
         return 0;
     }
