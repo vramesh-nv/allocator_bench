@@ -9,7 +9,6 @@
 // Forward declaration
 typedef struct arena arena_t;
 typedef struct arena_reservation arena_reservation_t;
-//typedef struct va_allocator_arenas va_allocator_arenas_t;
 
 typedef struct slab_allocator {
     uint64_t block_size;        // Size of each block in the slab
@@ -20,19 +19,17 @@ typedef struct slab_allocator {
 } slab_allocator_t;
 
 typedef struct va_block {
-    uint64_t start_addr;     // Starting address of the block
-    uint64_t size;          // Size of the block
-    int is_free;            // Whether the block is free
+    uint64_t start_addr;         // Starting address of the block
+    uint64_t size;               // Size of the block
+    int is_free;                 // Whether the block is free
     struct va_block *addr_next;  // Next block in address-ordered list
     struct va_block *addr_prev;  // Previous block in address-ordered list
-    CUradixNode radix_node;     // Node in size-ordered radix tree
+    CUradixNode radix_node;      // Node in size-ordered radix tree
 } va_block_t;
 
 typedef struct {
     va_block_t *addr_list;      // List ordered by address
     CUradixTree size_tree;      // Tree ordered by size
-    uint64_t total_va_size;     // Total VA space size
-    uint64_t used_va_size;      // Currently used VA space
     arena_reservation_t *parent_reservation;
 } obj_allocator_t;
 
@@ -49,7 +46,6 @@ typedef struct arena_object {
     uint64_t addr;
     uint64_t size;
     arena_reservation_t *reservation;
-    //CUIaddrTrackerNode addrtracker_node;
 } arena_object_t;
 
 typedef struct arena_info {
@@ -111,7 +107,6 @@ get_arena_idx_for_size(uint64_t size)
             return i;
         }
     }
-
     // There should be no case where the size is greater than the max size of the last arena.
     assert(0);
     return NUM_ARENAS;
@@ -224,7 +219,6 @@ insert_addr_list(obj_allocator_t *oa, va_block_t *block) {
     }
 }
 
-// Helper function to remove block from address-ordered list
 static void
 remove_addr_list(obj_allocator_t *oa, va_block_t *block) {
     if (block->addr_prev) {
@@ -253,7 +247,6 @@ free_to_obj_allocator(obj_allocator_t *oa, uint64_t addr)
     }
 
     block->is_free = 1;
-    //oa->used_va_size -= block->size;
     va_block_t *prev = block->addr_prev;
     va_block_t *next = block->addr_next;
 
@@ -307,7 +300,6 @@ allocate_from_obj_allocator(obj_allocator_t *oa, uint64_t size)
 
     // Mark the best fit block as in use
     best_fit->is_free = 0;
-    //oa->used_va_size += best_fit->size;
     radixTreeRemove(&best_fit->radix_node);
     return best_fit->start_addr;
 }
@@ -339,8 +331,6 @@ initialize_obj_allocator(arena_reservation_t *reservation)
     }
 
     oa->parent_reservation = reservation;
-    oa->used_va_size = 0;
-    oa->total_va_size = reservation->size;
     oa->addr_list = NULL;
     radixTreeInit(&oa->size_tree, 63);  
 
@@ -420,6 +410,7 @@ create_reservation(arena_t *arena)
     reservation->strategy = strategy;
     va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)arena->parent;
     cuiAddrTrackerRegisterNode(&arena_impl->res_tracker, &reservation->node, addr, arena->info.reservation_size, reservation);
+    arena_impl->total_va_size += arena->info.reservation_size;
     return reservation;
 }
 
@@ -438,9 +429,6 @@ allocate_from_reservation(arena_reservation_t *reservation, uint64_t size)
         addr = allocate_from_obj_allocator((obj_allocator_t *)reservation->strategy, size);
     }
 
-    /*if (addr) {
-
-    }*/
     return addr;
 }
 
@@ -490,7 +478,11 @@ arena_alloc(void *impl, uint64_t size)
     uint64_t arena_idx = get_arena_idx_for_size(size);
     assert(arena_idx < NUM_ARENAS);
 
-    return allocate_from_arena(&arena_impl->arenas[arena_idx], size);
+    uint64_t addr = allocate_from_arena(&arena_impl->arenas[arena_idx], size);
+    if (addr) {
+        arena_impl->used_va_size += size;
+    }
+    return addr;
 }
 
 static void
@@ -515,6 +507,7 @@ arena_free(void *impl, uint64_t addr)
         // Object allocation
         free_to_obj_allocator((obj_allocator_t *)reservation->strategy, addr);
     }
+    arena_impl->used_va_size -= node->size;
     return;
 }
 
@@ -522,18 +515,23 @@ static uint64_t
 arena_get_total_size(void *impl)
 {
     UNUSED(impl);
-    //va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    if (!arena_impl) {
+        return 0;
+    }
 
-    return 0;
+    return arena_impl->total_va_size;
 }
 
 static uint64_t
 arena_get_used_size(void *impl)
 {
-    UNUSED(impl);
-    //va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    if (!arena_impl) {
+        return 0;
+    }
 
-    return 0;
+    return arena_impl->used_va_size;
 }
 
 static void

@@ -52,7 +52,7 @@ void test_fragmentation(void) {
 }
 
 void test_severe_fragmentation(void) {
-    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
+    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA); //va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
     assert(allocator != NULL);
 
     const uint64_t total_va = va_allocator_get_total_size(allocator);
@@ -66,7 +66,7 @@ void test_severe_fragmentation(void) {
     std::vector<uint64_t> small_blocks;
     std::vector<uint64_t> medium_blocks;
 
-    while (iteration < 2000) {
+    while (true) {
         iteration++;
 
         // Allocate new blocks first

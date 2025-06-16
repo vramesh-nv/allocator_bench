@@ -48,12 +48,12 @@ TimingStats calculate_stats(const std::vector<double>& times) {
     return stats;
 }
 
-void test_same_size_allocation_performance(uint64_t block_size, size_t num_blocks) {
+void test_same_size_allocation_performance(va_allocator_type_t allocator_type, uint64_t block_size, size_t num_blocks) {
     std::cout << "\nTesting performance for " << num_blocks << " allocations of " 
               << (block_size / 1024.0) << " KB blocks\n";
     std::cout << "--------------------------------------------------------\n";
 
-    va_allocator_t* allocator = va_allocator_init(VA_ALLOCATOR_TYPE_DEFAULT);
+    va_allocator_t* allocator = va_allocator_init(allocator_type);
     assert(allocator != NULL);
 
     std::vector<uint64_t> addresses;
@@ -105,18 +105,26 @@ void test_same_size_allocation_performance(uint64_t block_size, size_t num_block
     va_allocator_destroy(allocator);
 }
 
+const char* allocator_type_to_string(va_allocator_type_t allocator_type) {
+    switch (allocator_type) {
+        case VA_ALLOCATOR_TYPE_DEFAULT: return "Default";
+        case VA_ALLOCATOR_TYPE_ARENA: return "Arena";
+        default: return "Unknown";
+    }
+}
+
 int main() {
     // Test different block sizes
     const size_t num_blocks = 1000;  // Number of blocks to allocate
 
-    // Test with 4KB blocks
-    test_same_size_allocation_performance(4 * 1024, num_blocks);
+    for (int i = 0; i < VA_ALLOCATOR_TYPE_MAX; i++) {
+        std::cout << "\n****Testing allocator type: " << i << " (" << allocator_type_to_string((va_allocator_type_t)i) << ")****" << std::endl;
+        // Test with 4KB blocks
+        test_same_size_allocation_performance((va_allocator_type_t)i, 4 * 1024, num_blocks);
 
-    // Test with 1MB blocks
-    test_same_size_allocation_performance(1024 * 1024, num_blocks);
-
-    // Test with 16MB blocks
-    //test_same_size_allocation_performance(16 * 1024 * 1024, num_blocks);
+        // Test with 1MB blocks
+        test_same_size_allocation_performance((va_allocator_type_t)i, 1024 * 1024, num_blocks);
+    }
 
     return 0;
 } 
