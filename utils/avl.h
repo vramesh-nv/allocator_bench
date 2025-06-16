@@ -48,40 +48,7 @@ void            cuAvlTreeNodeRemove(CUavlTree *tree, CUavlTreeNode *node);
 CUavlTreeNode  *cuAvlTreeNodeInOrderPredecessor(CUavlTree *tree, CUavlTreeNode *node);
 CUavlTreeNode  *cuAvlTreeNodeInOrderSuccessor(CUavlTree *tree, CUavlTreeNode *node);
 
-static inline CUavlTreeNode *cuAvlTreeNodeGetChild(CUavlTree *tree, CUavlTreeNode *node, int compare)
-{
-    UNUSED(tree);
-    CU_ASSERT(0 != compare);
-    return (0 > compare) ? node->left : node->right;
-}
-
-#if CU_AVLTREE_DEBUG
-static CUavlTreeNode *cuAvlTreeNodeFindWithNodeComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeNodeCompare comparator)
-{
-    UNUSED(tree);
-    CUavlTreeNode *node = tree->root;
-    while (node) {
-        int compare = comparator(key, node);
-        if (0 == compare) {
-            return node;
-        }
-        node = cuAvlTreeNodeGetChild(tree, node, compare);
-    }
-    return NULL;
-}
-#endif
-
-static CUavlTreeNode *cuAvlTreeNodeFindWithComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeCompare comparator)
-{
-    CUavlTreeNode *node = tree->root;
-    while (node) {
-        int compare = comparator(key, node->key);
-        if (0 == compare) {
-            return node;
-        }
-        node = cuAvlTreeNodeGetChild(tree, node, compare);
-    }
-    return NULL;
-}
+CUavlTreeNode *cuAvlTreeNodeFindWithNodeComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeNodeCompare comparator);
+CUavlTreeNode *cuAvlTreeNodeFindWithComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeCompare comparator);
 
 #endif // AVL_TREE_H

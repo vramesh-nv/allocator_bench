@@ -31,6 +31,42 @@ static void cuAvlTreeNodePrintRecursive(CUavlTree *tree, CUavlTreeNode *node, in
 }
 #endif
 
+static inline CUavlTreeNode *cuAvlTreeNodeGetChild(CUavlTree *tree, CUavlTreeNode *node, int compare)
+{
+    UNUSED(tree);
+    CU_ASSERT(0 != compare);
+    return (0 > compare) ? node->left : node->right;
+}
+
+
+CUavlTreeNode *cuAvlTreeNodeFindWithNodeComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeNodeCompare comparator)
+{
+    UNUSED(tree);
+    CUavlTreeNode *node = tree->root;
+    while (node) {
+        int compare = comparator(key, node);
+        if (0 == compare) {
+            return node;
+        }
+        node = cuAvlTreeNodeGetChild(tree, node, compare);
+    }
+    return NULL;
+}
+
+CUavlTreeNode *cuAvlTreeNodeFindWithComparator(CUavlTree *tree, CUavlTreeKey key, CUavlTreeCompare comparator)
+{
+    CUavlTreeNode *node = tree->root;
+    while (node) {
+        int compare = comparator(key, node->key);
+        if (0 == compare) {
+            return node;
+        }
+        node = cuAvlTreeNodeGetChild(tree, node, compare);
+    }
+    return NULL;
+}
+
+
 static int cuAvlTreeAssertValidRecursive(CUavlTree *tree, CUavlTreeNode *node, int mark)
 {
     int height;

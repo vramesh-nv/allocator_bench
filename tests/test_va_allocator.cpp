@@ -133,38 +133,13 @@ void test_severe_fragmentation(void) {
     va_allocator_destroy(allocator);
 }
 
-void test_arena_allocation(void) {
-    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
-    assert(allocator != NULL);
-
-    uint64_t addr0 = va_alloc(allocator, 256);
-    assert(addr0 != 0);
-    std::cout << "Allocated 256 bytes at address: 0x" << std::hex << addr0 << std::dec << std::endl;
-
-    uint64_t addr1 = va_alloc(allocator, 256);
-    assert(addr1 != 0);
-    std::cout << "Allocated 256 bytes at address: 0x" << std::hex << addr1 << std::dec << std::endl;
-
-    va_free(allocator, addr0);
-    std::cout << "Freed 256 bytes at address: 0x" << std::hex << addr0 << std::dec << std::endl;
-
-    va_free(allocator, addr1);
-    std::cout << "Freed 256 bytes at address: 0x" << std::hex << addr1 << std::dec << std::endl;
-
-    va_allocator_destroy(allocator);
-}
-
-
 int main(void) {
-#if 0
     std::cout << "Testing basic allocation..." << std::endl;
     test_basic_allocation();
     std::cout << "\nTesting fragmentation..." << std::endl;
     test_fragmentation();
     std::cout << "\nTesting severe fragmentation..." << std::endl;
     test_severe_fragmentation();
-#endif
 
-    test_arena_allocation();
     return 0;
 } 

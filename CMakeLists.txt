@@ -33,6 +33,7 @@ add_library(radix STATIC
     utils/radix.c
     utils/bitvector.c
     utils/avl.c
+    utils/addrtracker.c
 )
 set_target_properties(radix PROPERTIES 
     LINKER_LANGUAGE C
@@ -68,6 +69,19 @@ target_link_libraries(test_va_allocator PRIVATE
     radix
 )
 
+# Create arena allocator test executable
+add_executable(test_va_allocator_arena
+    tests/test_va_allocator_arena.cpp
+)
+set_target_properties(test_va_allocator_arena PROPERTIES
+    COMPILE_FLAGS "-g -O0"
+    LINK_FLAGS "-g"
+)
+target_link_libraries(test_va_allocator_arena PRIVATE
+    va_allocator
+    radix
+)
+
 # Create performance test executable
 add_executable(test_va_allocator_perf tests/test_va_allocator_perf.cpp)
 set_target_properties(test_va_allocator_perf PROPERTIES
@@ -82,4 +96,5 @@ target_link_libraries(test_va_allocator_perf PRIVATE
 # Enable testing
 enable_testing()
 add_test(NAME va_allocator_test COMMAND test_va_allocator)
+add_test(NAME va_allocator_arena_test COMMAND test_va_allocator_arena)
 add_test(NAME va_allocator_perf_test COMMAND test_va_allocator_perf) 
