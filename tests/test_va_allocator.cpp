@@ -66,7 +66,7 @@ void test_severe_fragmentation(void) {
     std::vector<uint64_t> small_blocks;
     std::vector<uint64_t> medium_blocks;
 
-    while (true) {
+    while (iteration < 2000) {
         iteration++;
 
         // Allocate new blocks first

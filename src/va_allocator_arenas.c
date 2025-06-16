@@ -49,7 +49,7 @@ typedef struct arena_object {
     uint64_t addr;
     uint64_t size;
     arena_reservation_t *reservation;
-    CUIaddrTrackerNode addrtracker_node;
+    //CUIaddrTrackerNode addrtracker_node;
 } arena_object_t;
 
 typedef struct arena_info {
@@ -117,6 +117,14 @@ get_arena_idx_for_size(uint64_t size)
     return NUM_ARENAS;
 }
 
+//
+// Slab allocator functions:
+//
+// initialize_slab
+// deinitialize_slab
+// allocate_from_slab
+// free_to_slab
+//
 static void
 deinitialize_slab(slab_allocator_t *sa)
 {
@@ -186,7 +194,16 @@ free_to_slab(slab_allocator_t *sa, uint64_t addr)
     sa->free_blocks++;
 }
 
-// Helper function to insert block into address-ordered list
+//
+// Object allocator functions:
+//
+// initialize_obj_allocator
+// deinitialize_obj_allocator
+// allocate_from_obj_allocator
+// free_to_obj_allocator
+// insert_addr_list (Helper function to insert block into address-ordered list)
+// remove_addr_list (Helper function to remove block from address-ordered list)
+//
 static void
 insert_addr_list(obj_allocator_t *oa, va_block_t *block) {
     va_block_t *current = oa->addr_list;
@@ -345,6 +362,13 @@ initialize_obj_allocator(arena_reservation_t *reservation)
     return oa;
 }
 
+//
+// Reservation functions:
+//
+// destroy_reservation
+// create_reservation
+// allocate_from_reservation
+//
 static void
 destroy_reservation(arena_reservation_t *reservation)
 {
@@ -420,6 +444,11 @@ allocate_from_reservation(arena_reservation_t *reservation, uint64_t size)
     return addr;
 }
 
+//
+// Arena functions:
+//
+// allocate_from_arena
+//
 static uint64_t
 allocate_from_arena(arena_t *arena, uint64_t size)
 {

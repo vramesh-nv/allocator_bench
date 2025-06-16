@@ -8,6 +8,18 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <stdint.h>
+
+// These are required mostly for linter 
+// Ensure MAP_ANONYMOUS is defined
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS 0x20
+#endif
+
+// Ensure MAP_NORESERVE is defined
+#ifndef MAP_NORESERVE
+#define MAP_NORESERVE 0x4000
+#endif
 
 // Macro to get parent structure from member pointer
 #define container_of(ptr, type, member) \

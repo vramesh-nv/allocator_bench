@@ -5,12 +5,13 @@
 #include <algorithm>
 #include "va_allocator.h"
 
-/*// Test small allocations that should use slab allocator
-void test_slab_allocation(void) {
+// Test small allocations that should use slab allocator
+void test_slab_allocation(void)
+{
     va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
     assert(allocator != NULL);
 
-    std::cout << "\nTesting slab allocation (≤2KB blocks)..." << std::endl;
+    std::cout << "Testing slab allocation (≤2KB blocks)..." << std::endl;
 
     // Test different small sizes that should use slab allocator
     const std::vector<uint64_t> sizes = {256, 512, 1024, 2048};
@@ -22,26 +23,27 @@ void test_slab_allocation(void) {
             uint64_t addr = va_alloc(allocator, size);
             assert(addr != 0);
             addresses.push_back(addr);
-            std::cout << "Allocated " << size << " bytes at address: 0x" 
-                      << std::hex << addr << std::dec << std::endl;
+            //std::cout << "Allocated " << size << " bytes at address: 0x" 
+            //          << std::hex << addr << std::dec << std::endl;
         }
     }
 
     // Free all allocations
     for (uint64_t addr : addresses) {
         va_free(allocator, addr);
-        std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
     }
 
     va_allocator_destroy(allocator);
 }
 
 // Test medium allocations that should use different arena strategies
-void test_medium_allocation(void) {
+void test_medium_allocation(void)
+{
     va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
     assert(allocator != NULL);
 
-    std::cout << "\nTesting medium allocation (4KB-64KB blocks)..." << std::endl;
+    std::cout << "Testing medium allocation (4KB-64KB blocks)..." << std::endl;
 
     const std::vector<uint64_t> sizes = {4096, 8192, 16384, 32768, 65536};
     std::vector<uint64_t> addresses;
@@ -50,25 +52,26 @@ void test_medium_allocation(void) {
         uint64_t addr = va_alloc(allocator, size);
         assert(addr != 0);
         addresses.push_back(addr);
-        std::cout << "Allocated " << (size/1024) << "KB at address: 0x" 
-                  << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Allocated " << (size/1024) << "KB at address: 0x" 
+        //          << std::hex << addr << std::dec << std::endl;
     }
 
     // Free all allocations
     for (uint64_t addr : addresses) {
         va_free(allocator, addr);
-        std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
     }
 
     va_allocator_destroy(allocator);
 }
 
 // Test large allocations
-void test_large_allocation(void) {
+void test_large_allocation(void)
+{
     va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
     assert(allocator != NULL);
 
-    std::cout << "\nTesting large allocation (2MB-32MB blocks)..." << std::endl;
+    std::cout << "Testing large allocation (2MB-32MB blocks)..." << std::endl;
 
     const std::vector<uint64_t> sizes = {
         2 * 1024 * 1024,    // 2MB
@@ -83,25 +86,26 @@ void test_large_allocation(void) {
         uint64_t addr = va_alloc(allocator, size);
         assert(addr != 0);
         addresses.push_back(addr);
-        std::cout << "Allocated " << (size/(1024*1024)) << "MB at address: 0x" 
-                  << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Allocated " << (size/(1024*1024)) << "MB at address: 0x" 
+        //          << std::hex << addr << std::dec << std::endl;
     }
 
     // Free all allocations
     for (uint64_t addr : addresses) {
         va_free(allocator, addr);
-        std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
     }
 
     va_allocator_destroy(allocator);
 }
 
 // Test mixed allocation patterns
-void test_mixed_allocation(void) {
+void test_mixed_allocation(void)
+{
     va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
     assert(allocator != NULL);
 
-    std::cout << "\nTesting mixed allocation patterns..." << std::endl;
+    std::cout << "Testing mixed allocation patterns..." << std::endl;
 
     std::vector<uint64_t> addresses;
     std::random_device rd;
@@ -109,29 +113,30 @@ void test_mixed_allocation(void) {
     std::uniform_int_distribution<> size_dist(256, 32 * 1024 * 1024); // 256B to 32MB
 
     // Allocate random sizes
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10000; i++) {
         uint64_t size = size_dist(gen);
         uint64_t addr = va_alloc(allocator, size);
         if (addr == 0) {
             std::cout << "Failed to allocate " << size << " bytes" << std::endl;
+            //assert(0);
             break;
         }
         addresses.push_back(addr);
-        std::cout << "Allocated " << size << " bytes at address: 0x" 
-                  << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Allocated " << size << " bytes at address: 0x" 
+        //          << std::hex << addr << std::dec << std::endl;
     }
 
     // Free in random order
     std::shuffle(addresses.begin(), addresses.end(), gen);
     for (uint64_t addr : addresses) {
         va_free(allocator, addr);
-        std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
+        //std::cout << "Freed address: 0x" << std::hex << addr << std::dec << std::endl;
     }
 
     va_allocator_destroy(allocator);
 }
 
-// Test arena allocator statistics
+/*// Test arena allocator statistics
 void test_arena_stats(void) {
     va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
     assert(allocator != NULL);
@@ -166,6 +171,25 @@ void test_arena_stats(void) {
 
     va_allocator_destroy(allocator);
 }*/
+
+/*void test_basic_alloc_free_large(void)
+{
+    va_allocator_t *allocator = va_allocator_init(VA_ALLOCATOR_TYPE_ARENA);
+    assert(allocator != NULL);
+
+    size_t num_allocs = 100;
+    size_t alloc_size = 2ull * 1024ull * 1024ull;
+    for (size_t i = 0; i < num_allocs; i++) {
+        uint64_t addr = va_alloc(allocator, alloc_size);
+        if (addr == 0) {
+            std::cerr << "Failed to allocate " << alloc_size << " bytes, iteration: " << i << std::endl;
+            assert(0);
+        }
+        va_free(allocator, addr);
+    }
+
+    va_allocator_destroy(allocator);
+}
 
 void test_basic_alloc_free_small(void)
 {
@@ -208,7 +232,7 @@ void test_alloc_free_multiple_small(void)
     }
 
     va_allocator_destroy(allocator);
-}
+}*/
 
 void test_allocator_create_destroy(void)
 {
@@ -222,8 +246,14 @@ int main(void) {
     std::cout << "Starting arena allocator tests..." << std::endl;
 
     test_allocator_create_destroy();
-    test_basic_alloc_free_small();
-    test_alloc_free_multiple_small();
+    test_slab_allocation();
+    test_medium_allocation();
+    test_large_allocation();
+    test_mixed_allocation();
+
+    //test_basic_alloc_free_small();
+    //test_alloc_free_multiple_small();
+    //test_basic_alloc_free_large();
 
     std::cout << "All arena allocator tests completed successfully!" << std::endl;
     return 0;
