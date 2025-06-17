@@ -42,11 +42,11 @@ typedef struct arena_reservation {
     arena_reservation_t *next;
 } arena_reservation_t;
 
-typedef struct arena_object {
+/*typedef struct arena_object {
     uint64_t addr;
     uint64_t size;
     arena_reservation_t *reservation;
-} arena_object_t;
+} arena_object_t;*/
 
 typedef struct arena_info {
     uint64_t max_per_alloc_size;
@@ -54,11 +54,11 @@ typedef struct arena_info {
 } arena_info_t;
 
 typedef struct arena {
-    arena_info_t info;
-    uint64_t idx;
-    int is_slab;
-    void *parent;
-    arena_reservation_t *reservation_head;
+    arena_info_t info; // Arena info: max_per_alloc_size, reservation_size
+    uint64_t idx;      // Arena index
+    int is_slab;       // Whether the arena is managed by a slab allocator strategy
+    void *parent;      // Pointer to the parent allocator
+    arena_reservation_t *reservation_head; // Head of the reservation list
 } arena_t;
 
 //
@@ -455,7 +455,7 @@ allocate_from_arena(arena_t *arena, uint64_t size)
     if (!reservation) {
         goto Done;
     }
-    
+
     addr = allocate_from_reservation(reservation, size);
     reservation->next = arena->reservation_head;
     arena->reservation_head = reservation;
