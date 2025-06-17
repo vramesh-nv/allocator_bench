@@ -480,6 +480,9 @@ arena_alloc(void *impl, uint64_t size)
 
     uint64_t addr = allocate_from_arena(&arena_impl->arenas[arena_idx], size);
     if (addr) {
+        // Note: This is not quite right because the actual size of the block may be different
+        // from the requested size. For example the slab allocator may return a block of size 4KB
+        // even if the requested size is 1KB. But this is good enough for a prototype.
         arena_impl->used_va_size += size;
     }
     return addr;

@@ -93,8 +93,20 @@ target_link_libraries(test_va_allocator_perf PRIVATE
     radix
 )
 
+# Create benchmark test executable
+add_executable(test_va_allocator_benchmark tests/test_va_allocator_benchmark.cpp)
+set_target_properties(test_va_allocator_benchmark PROPERTIES
+    COMPILE_FLAGS "-g -O3"  # Use O3 for better benchmark performance
+    LINK_FLAGS "-g"
+)
+target_link_libraries(test_va_allocator_benchmark PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
 add_test(NAME va_allocator_test COMMAND test_va_allocator)
 add_test(NAME va_allocator_arena_test COMMAND test_va_allocator_arena)
-add_test(NAME va_allocator_perf_test COMMAND test_va_allocator_perf) 
+add_test(NAME va_allocator_perf_test COMMAND test_va_allocator_perf)
+add_test(NAME va_allocator_benchmark_test COMMAND test_va_allocator_benchmark) 
