@@ -89,3 +89,11 @@ va_allocator_print(va_allocator_t *allocator) {
     }
     allocator->ops->print(allocator->ops->impl);
 }
+
+void
+va_flush(va_allocator_t *allocator) {
+    if (!allocator || !allocator->ops || !allocator->ops->flush) {
+        return;
+    }
+    allocator->ops->flush(allocator->ops->impl);
+}

@@ -18,6 +18,8 @@ void va_allocator_destroy(va_allocator_t *allocator);
 uint64_t va_alloc(va_allocator_t *allocator, uint64_t size);
 void va_free(va_allocator_t *allocator, uint64_t addr);
 
+void va_flush(va_allocator_t *allocator);
+
 // Get total VA size
 uint64_t va_allocator_get_total_size(va_allocator_t *allocator);
 

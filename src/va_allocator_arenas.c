@@ -569,6 +569,12 @@ arena_allocator_print(void *impl)
     return;
 }
 
+static void
+arena_flush(void *impl)
+{
+    UNUSED(impl);
+}
+
 // Function to get the default implementation operations
 va_allocator_ops_t *
 get_arena_allocator_ops(void)
@@ -580,6 +586,7 @@ get_arena_allocator_ops(void)
         .get_used_size = arena_get_used_size,
         .print = arena_allocator_print,
         .destroy = arena_destroy,
+        .flush = arena_flush,
         .impl = NULL
     };
     return &ops;

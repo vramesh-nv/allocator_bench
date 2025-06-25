@@ -45,6 +45,7 @@ add_library(va_allocator STATIC
     src/va_allocator.c
     src/va_allocator_default.c
     src/va_allocator_arenas.c
+    src/physical_mem.c
 )
 set_target_properties(va_allocator PROPERTIES 
     LINKER_LANGUAGE C
@@ -54,59 +55,21 @@ set_target_properties(va_allocator PROPERTIES
 # Link VA allocator with radix
 target_link_libraries(va_allocator PRIVATE radix)
 
-# Create test executable
-add_executable(test_va_allocator
-    tests/test_va_allocator.cpp
+# Create sanity test executable
+add_executable(sanity
+    tests/sanity.cpp
 )
-set_target_properties(test_va_allocator PROPERTIES
+set_target_properties(sanity PROPERTIES
     COMPILE_FLAGS "-g -O0"
     LINK_FLAGS "-g"
 )
 
-# Link test executable with libraries
-target_link_libraries(test_va_allocator PRIVATE
-    va_allocator
-    radix
-)
-
-# Create arena allocator test executable
-add_executable(test_va_allocator_arena
-    tests/test_va_allocator_arena.cpp
-)
-set_target_properties(test_va_allocator_arena PROPERTIES
-    COMPILE_FLAGS "-g -O0"
-    LINK_FLAGS "-g"
-)
-target_link_libraries(test_va_allocator_arena PRIVATE
-    va_allocator
-    radix
-)
-
-# Create performance test executable
-add_executable(test_va_allocator_perf tests/test_va_allocator_perf.cpp)
-set_target_properties(test_va_allocator_perf PROPERTIES
-    COMPILE_FLAGS "-g -O0"
-    LINK_FLAGS "-g"
-)
-target_link_libraries(test_va_allocator_perf PRIVATE
-    va_allocator
-    radix
-)
-
-# Create benchmark test executable
-add_executable(test_va_allocator_benchmark tests/test_va_allocator_benchmark.cpp)
-set_target_properties(test_va_allocator_benchmark PROPERTIES
-    COMPILE_FLAGS "-g -O3"  # Use O3 for better benchmark performance
-    LINK_FLAGS "-g"
-)
-target_link_libraries(test_va_allocator_benchmark PRIVATE
+# Link sanity test executable with libraries
+target_link_libraries(sanity PRIVATE
     va_allocator
     radix
 )
 
 # Enable testing
 enable_testing()
-add_test(NAME va_allocator_test COMMAND test_va_allocator)
-add_test(NAME va_allocator_arena_test COMMAND test_va_allocator_arena)
-add_test(NAME va_allocator_perf_test COMMAND test_va_allocator_perf)
-add_test(NAME va_allocator_benchmark_test COMMAND test_va_allocator_benchmark) 
+add_test(NAME sanity_test COMMAND sanity) 
