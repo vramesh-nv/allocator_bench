@@ -26,6 +26,8 @@ uint64_t va_allocator_get_total_size(va_allocator_t *allocator);
 // Get used VA size
 uint64_t va_allocator_get_used_size(va_allocator_t *allocator);
 
+uint64_t get_physical_mem_usage(va_allocator_t *allocator);
+
 // Print allocator stats
 void va_allocator_print(va_allocator_t *allocator);
 

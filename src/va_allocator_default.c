@@ -27,7 +27,9 @@ typedef struct va_block {
 typedef struct {
     va_block_t *addr_list;             // List ordered by address
     CUradixTree size_tree;             // Tree ordered by size
+    physical_mem_mgr_t *physical_mem_mgr;
     physical_mem_t **physical_blocks;  // Physical memory
+    uint32_t *ref_count;               // Reference count for each physical block
     uint64_t num_physical_blocks;      // Number of physical blocks
 
     uint64_t total_va_size;            // Total VA space size
@@ -85,6 +87,37 @@ remove_addr_list(va_allocator_default_t *impl, va_block_t *block) {
 static void default_free(void *impl, uint64_t addr);
 
 // Implementation of alloc function
+
+static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_impl, va_block_t *best_fit)
+{
+    uint64_t num_remaps = 0;
+    for (uint64_t i = 0; i < default_impl->num_physical_blocks; i++) {
+        if (i >= best_fit->block_range.low_idx && i <= best_fit->block_range.high_idx) {
+            continue;
+        }
+
+        if (!default_impl->physical_blocks[i] || default_impl->ref_count[i] > 0) {
+            continue;
+        }
+
+        default_impl->physical_blocks[best_fit->block_range.low_idx + num_remaps] = default_impl->physical_blocks[i];
+        default_impl->physical_blocks[i] = NULL;
+    }
+
+    for (uint64_t i = best_fit->block_range.low_idx; i <= best_fit->block_range.high_idx; i++) {
+        if (!default_impl->physical_blocks[i]) {
+            assert(default_impl->ref_count[i] == 0);
+            default_impl->physical_blocks[i] = allocate_physical_mem(default_impl->physical_mem_mgr, PHYSICAL_BLOCK_SIZE);
+            if (!default_impl->physical_blocks[i]) {
+                return 0;
+            }
+        }
+        default_impl->ref_count[i]++;
+    }
+
+    return best_fit->start_addr;
+}
+
 static uint64_t
 default_alloc(void *impl, uint64_t size) {
     va_allocator_default_t *default_impl = (va_allocator_default_t *)impl;
@@ -126,15 +159,13 @@ default_alloc(void *impl, uint64_t size) {
     radixTreeRemove(&best_fit->radix_node);
 
     // Update physical memory tracking
-    for (uint64_t i = best_fit->block_range.low_idx; i <= best_fit->block_range.high_idx; i++) {
-        default_impl->physical_blocks[i] = allocate_physical_mem(PHYSICAL_BLOCK_SIZE);
-        if (!default_impl->physical_blocks[i]) {
-            default_free(impl, best_fit->start_addr);
-            return 0;
-        }
+    uint64_t addr = va_block_back_with_physical_mem(default_impl, best_fit);
+    if (addr == 0) {
+        default_free(impl, best_fit->start_addr);
+        return 0;
     }
 
-    return best_fit->start_addr;
+    return addr;
 }
 
 // Implementation of free function
@@ -151,6 +182,12 @@ default_free(void *impl, uint64_t addr) {
     }
     if (!block || block->is_free) {
         return;
+    }
+
+    for (uint64_t i = block->block_range.low_idx; i <= block->block_range.high_idx; i++) {
+        if (default_impl->ref_count[i] > 0) {
+            default_impl->ref_count[i]--;
+        }
     }
 
     block->is_free = 1;
@@ -221,27 +258,23 @@ default_flush(void *impl) {
         return;
     }
 
-    // Flush all physical blocks
-    va_block_t *block = default_impl->addr_list;
-    while (block) {
-        if (block->is_free) {
-            uint64_t blocks = block->block_range.high_idx - block->block_range.low_idx + 1;
-            for (uint64_t i = 0; i < blocks; i++) {
-                if (!default_impl->physical_blocks[block->block_range.low_idx + i]) {
-                    continue;
-                }
-                if ((i == 0) && ((block->start_addr - default_impl->addr_list->start_addr) % PHYSICAL_BLOCK_SIZE != 0)) {
-                    continue;
-                }
-                if ((i == blocks - 1) && (block->size % PHYSICAL_BLOCK_SIZE != 0)) {
-                    continue;
-                }
-                free_physical_mem(default_impl->physical_blocks[block->block_range.low_idx + i]);
-                default_impl->physical_blocks[block->block_range.low_idx + i] = NULL;
-            }
+    // Flush all physical blocks that are not referenced
+    for (uint64_t i = 0; i < default_impl->num_physical_blocks; i++) {
+        if (default_impl->physical_blocks[i] && default_impl->ref_count[i] == 0) {
+            free_physical_mem(default_impl->physical_mem_mgr, default_impl->physical_blocks[i]);
+            default_impl->physical_blocks[i] = NULL;
         }
-        block = block->addr_next;
     }
+}
+
+static uint64_t
+default_get_physical_mem_usage(void *impl)
+{
+    va_allocator_default_t *default_impl = (va_allocator_default_t *)impl;
+    if (!default_impl) {
+        return 0;
+    }
+    return get_total_physical_mem_usage(default_impl->physical_mem_mgr);
 }
 
 // Function to get the default implementation operations
@@ -255,12 +288,35 @@ get_default_allocator_ops(void) {
         .print = default_allocator_print,
         .destroy = default_destroy,
         .flush = default_flush,
+        .get_physical_mem_usage = default_get_physical_mem_usage,
         .impl = NULL
     };
     return &ops;
 }
 
 // Function to initialize the default implementation
+static void
+deinit_default_allocator(va_allocator_default_t *impl)
+{
+    if (!impl) {
+        return;
+    }
+
+    if (impl->ref_count) {
+        free(impl->ref_count);
+    }
+    if (impl->physical_blocks) {
+        free(impl->physical_blocks);
+    }
+    if (impl->physical_mem_mgr) {
+        physical_mem_mgr_destroy(impl->physical_mem_mgr);
+    }
+    if (impl->addr_list && impl->addr_list->start_addr) {
+        FREE_VA((void *)impl->addr_list->start_addr, impl->total_va_size);
+    }
+    free(impl);
+}
+
 void *
 init_default_allocator(void) {
     va_allocator_default_t *impl = (va_allocator_default_t *)calloc(1, sizeof(*impl));
@@ -274,7 +330,13 @@ init_default_allocator(void) {
     radixTreeInit(&impl->size_tree, 63);  // Use 63 bits for size keys
     void *va_base = RESERVE_VA(impl->total_va_size);
     if (va_base == MAP_FAILED) {
-        free(impl);
+        deinit_default_allocator(impl);
+        return NULL;
+    }
+
+    impl->physical_mem_mgr = physical_mem_mgr_create();
+    if (!impl->physical_mem_mgr) {
+        deinit_default_allocator(impl);
         return NULL;
     }
 
@@ -282,17 +344,20 @@ init_default_allocator(void) {
     uint64_t num_physical_blocks = impl->total_va_size / PHYSICAL_BLOCK_SIZE;
     impl->physical_blocks = calloc(num_physical_blocks, sizeof(physical_mem_t *));
     if (!impl->physical_blocks) {
-        FREE_VA(va_base, impl->total_va_size);
-        free(impl);
+        deinit_default_allocator(impl);
+        return NULL;
+    }
+
+    impl->ref_count = calloc(num_physical_blocks, sizeof(uint32_t));
+    if (!impl->ref_count) {
+        deinit_default_allocator(impl);
         return NULL;
     }
     impl->num_physical_blocks = num_physical_blocks;
 
     va_block_t *initial_block = calloc(1, sizeof(va_block_t));
     if (!initial_block) {
-        FREE_VA(va_base, impl->total_va_size);
-        free(impl->physical_blocks);
-        free(impl);
+        deinit_default_allocator(impl);
         return NULL;
     }
 

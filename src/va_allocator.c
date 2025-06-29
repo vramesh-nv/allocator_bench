@@ -97,3 +97,11 @@ va_flush(va_allocator_t *allocator) {
     }
     allocator->ops->flush(allocator->ops->impl);
 }
+
+uint64_t
+get_physical_mem_usage(va_allocator_t *allocator) {
+    if (!allocator) {
+        return 0;
+    }
+    return allocator->ops->get_physical_mem_usage(allocator->ops->impl);
+}
