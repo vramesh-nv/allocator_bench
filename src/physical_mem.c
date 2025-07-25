@@ -1,9 +1,21 @@
 #include "physical_mem.h"
 
+typedef struct physical_mem physical_mem_t;
+
+
+
+typedef struct mapping {
+    physical_mem_t *mem;
+    uint64_t va;
+    uint64_t size;
+    struct mapping *next;
+} mapping_t;
+
 typedef struct physical_mem {
     // This is the VA that we will mmap and mlock.
     uint64_t internal_va;
     uint64_t size;
+    mapping_t *mapping_list;
     physical_mem_t *next;
 } physical_mem_t;
 
@@ -79,7 +91,6 @@ void free_physical_mem(physical_mem_mgr_t *mgr, physical_mem_t* mem) {
         free(mem);
         assert(mgr->used_size >= size);
         mgr->used_size -= size;
-
     }
 }
 
@@ -89,18 +100,72 @@ int map_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
         return -1;
     }
 
-    /*int ret = (int)mmap(UINT2PTR(va), size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (ret == MAP_FAILED) {
+    uint64_t start_va = va;
+    uint64_t end_va = va + size;
+    mapping_t *current = mem->mapping_list;
+    while (current) {
+        if (current->va <= start_va && (current->va + current->size >= start_va)) {
+            return -1;
+        }
+        if (current->va <= end_va && (current->va + current->size >= end_va)) {
+            return -1;
+        }
+        current = current->next;
+    }
+
+    mapping_t *mapping = (mapping_t*)calloc(1, sizeof(*mapping));
+    if (!mapping) {
         return -1;
-    }*/
+    }
+
+    // Mimic GPU mapping behavior through mmap access flags
+    void *ret = mmap(UINT2PTR(va), size, PROT_READ | PROT_WRITE, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (ret == MAP_FAILED) {
+        free(mapping);
+        return -1;
+    }
+
+    mapping->mem = mem;
+    mapping->va = va;
+    mapping->size = size;
+    mapping->next = mem->mapping_list;
+    mem->mapping_list = mapping;
+
     return 0;
 }
 
 int unmap_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
 {
-    UNUSED(mem);
-    UNUSED(va);
-    UNUSED(size);
+    if (mem == NULL || va == 0 || size == 0) {
+        return -1;
+    }
+
+    mapping_t *prev = NULL;
+    mapping_t *current = mem->mapping_list;
+    while (current) {
+        if (current->va == va) {
+            if (prev) {
+                prev->next = current->next;
+            } else {
+                mem->mapping_list = current->next;
+            }
+            break;
+        }
+        current = current->next;
+    }
+
+    if (current == NULL) {
+        return -1;
+    }
+
+    // Mimic GPU unmapping behavior through mmap access flags
+    void *ret = mmap(UINT2PTR(va), size, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (ret == MAP_FAILED) {
+        assert(0);
+        return -1;
+    }
+    free(current);
+
     return 0;
 }
 

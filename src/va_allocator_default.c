@@ -90,6 +90,7 @@ static void default_free(void *impl, uint64_t addr);
 
 static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_impl, va_block_t *best_fit)
 {
+    int ret = 0;
     uint64_t num_remaps = 0;
     for (uint64_t i = 0; i < default_impl->num_physical_blocks; i++) {
         if (i >= best_fit->block_range.low_idx && i <= best_fit->block_range.high_idx) {
@@ -100,8 +101,17 @@ static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_
             continue;
         }
 
+        uint64_t old_va = default_impl->addr_list->start_addr + i * PHYSICAL_BLOCK_SIZE;
+        ret = unmap_physical_mem(default_impl->physical_blocks[i], old_va, PHYSICAL_BLOCK_SIZE);
+        assert(ret == 0);
+
+        uint64_t new_va = best_fit->start_addr + (best_fit->block_range.low_idx + num_remaps) * PHYSICAL_BLOCK_SIZE;
+        ret = map_physical_mem(default_impl->physical_blocks[i], new_va, PHYSICAL_BLOCK_SIZE);
+        assert(ret == 0);
+
         default_impl->physical_blocks[best_fit->block_range.low_idx + num_remaps] = default_impl->physical_blocks[i];
         default_impl->physical_blocks[i] = NULL;
+        num_remaps++;
     }
 
     for (uint64_t i = best_fit->block_range.low_idx; i <= best_fit->block_range.high_idx; i++) {
@@ -111,6 +121,9 @@ static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_
             if (!default_impl->physical_blocks[i]) {
                 return 0;
             }
+            uint64_t map_va = best_fit->start_addr + (i - best_fit->block_range.low_idx) * PHYSICAL_BLOCK_SIZE;
+            ret = map_physical_mem(default_impl->physical_blocks[i], map_va, PHYSICAL_BLOCK_SIZE);
+            assert(ret == 0);
         }
         default_impl->ref_count[i]++;
     }
@@ -144,11 +157,12 @@ default_alloc(void *impl, uint64_t size) {
         new_block->addr_prev = NULL;
 
         new_block->block_range.low_idx = (new_block->start_addr - default_impl->addr_list->start_addr) / PHYSICAL_BLOCK_SIZE;
-        new_block->block_range.high_idx = new_block->block_range.low_idx + (new_block->size - 1) / PHYSICAL_BLOCK_SIZE;
+        new_block->block_range.high_idx = best_fit->block_range.high_idx;
 
         // Update the best fit block's size to reflect this split
         best_fit->size = size;
-        best_fit->block_range.high_idx = best_fit->block_range.low_idx + (best_fit->size - 1) / PHYSICAL_BLOCK_SIZE;
+        uint64_t offset = best_fit->start_addr + best_fit->size - default_impl->addr_list->start_addr;
+        best_fit->block_range.high_idx = offset % PHYSICAL_BLOCK_SIZE ? offset / PHYSICAL_BLOCK_SIZE : offset / PHYSICAL_BLOCK_SIZE - 1;
         insert_addr_list(default_impl, new_block);
         radixTreeInsert(&default_impl->size_tree, &new_block->radix_node, new_block->size);
     }
@@ -198,7 +212,8 @@ default_free(void *impl, uint64_t addr) {
     assert(!prev || (prev && (block->start_addr == prev->start_addr + prev->size)));
     if (prev && prev->is_free) {
         prev->size += block->size;
-        prev->block_range.high_idx = prev->block_range.low_idx + (prev->size - 1) / PHYSICAL_BLOCK_SIZE;
+        uint64_t offset = prev->start_addr + prev->size - default_impl->addr_list->start_addr;
+        prev->block_range.high_idx = offset % PHYSICAL_BLOCK_SIZE ? offset / PHYSICAL_BLOCK_SIZE : offset / PHYSICAL_BLOCK_SIZE - 1;
         remove_addr_list(default_impl, block);
         radixTreeRemove(&prev->radix_node);
         free(block);
@@ -208,7 +223,8 @@ default_free(void *impl, uint64_t addr) {
     assert(!next || (next && (block->start_addr + block->size == next->start_addr)));
     if (next && next->is_free) {
         block->size += next->size;
-        block->block_range.high_idx = block->block_range.low_idx + (block->size - 1) / PHYSICAL_BLOCK_SIZE;
+        uint64_t offset = block->start_addr + block->size - default_impl->addr_list->start_addr;
+        block->block_range.high_idx = offset % PHYSICAL_BLOCK_SIZE ? offset / PHYSICAL_BLOCK_SIZE : offset / PHYSICAL_BLOCK_SIZE - 1;
         remove_addr_list(default_impl, next);
         radixTreeRemove(&next->radix_node);
         free(next);
@@ -261,6 +277,8 @@ default_flush(void *impl) {
     // Flush all physical blocks that are not referenced
     for (uint64_t i = 0; i < default_impl->num_physical_blocks; i++) {
         if (default_impl->physical_blocks[i] && default_impl->ref_count[i] == 0) {
+            int ret = unmap_physical_mem(default_impl->physical_blocks[i], default_impl->addr_list->start_addr + i * PHYSICAL_BLOCK_SIZE, PHYSICAL_BLOCK_SIZE);
+            assert(ret == 0);
             free_physical_mem(default_impl->physical_mem_mgr, default_impl->physical_blocks[i]);
             default_impl->physical_blocks[i] = NULL;
         }
