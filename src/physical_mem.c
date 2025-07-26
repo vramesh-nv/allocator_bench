@@ -2,8 +2,6 @@
 
 typedef struct physical_mem physical_mem_t;
 
-
-
 typedef struct mapping {
     physical_mem_t *mem;
     uint64_t va;
@@ -87,6 +85,8 @@ void free_physical_mem(physical_mem_mgr_t *mgr, physical_mem_t* mem) {
             prev = curr;
             curr = curr->next;
         }
+        assert(curr == mem);
+        assert(curr->mapping_list == NULL);
         FREE_VA(UINT2PTR(mem->internal_va), mem->size);
         free(mem);
         assert(mgr->used_size >= size);
@@ -102,12 +102,16 @@ int map_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
 
     uint64_t start_va = va;
     uint64_t end_va = va + size;
+    assert(start_va < end_va);
+
     mapping_t *current = mem->mapping_list;
     while (current) {
-        if (current->va <= start_va && (current->va + current->size >= start_va)) {
+
+        if (start_va >= current->va && start_va < (current->va + current->size)) {
             return -1;
         }
-        if (current->va <= end_va && (current->va + current->size >= end_va)) {
+
+        if (end_va >= current->va && end_va < (current->va + current->size)) {
             return -1;
         }
         current = current->next;
@@ -151,6 +155,7 @@ int unmap_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
             }
             break;
         }
+        prev = current;
         current = current->next;
     }
 

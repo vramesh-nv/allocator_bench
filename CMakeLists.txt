@@ -70,6 +70,22 @@ target_link_libraries(sanity PRIVATE
     radix
 )
 
+# Create physical memory test executable
+add_executable(test_physical_mem
+    tests/test_physical_mem.c
+)
+set_target_properties(test_physical_mem PROPERTIES
+    COMPILE_FLAGS "-g -O0"
+    LINK_FLAGS "-g"
+)
+
+# Link physical memory test with libraries
+target_link_libraries(test_physical_mem PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
-add_test(NAME sanity_test COMMAND sanity) 
+add_test(NAME sanity_test COMMAND sanity)
+add_test(NAME physical_mem_test COMMAND test_physical_mem) 
