@@ -114,7 +114,7 @@ static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_
         num_remaps++;
     }
 
-    for (uint64_t i = best_fit->block_range.low_idx; i <= best_fit->block_range.high_idx; i++) {
+    for (uint64_t i = best_fit->block_range.low_idx + num_remaps; i <= best_fit->block_range.high_idx; i++) {
         if (!default_impl->physical_blocks[i]) {
             assert(default_impl->ref_count[i] == 0);
             default_impl->physical_blocks[i] = allocate_physical_mem(default_impl->physical_mem_mgr, PHYSICAL_BLOCK_SIZE);
