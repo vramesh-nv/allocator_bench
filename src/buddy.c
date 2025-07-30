@@ -11,6 +11,13 @@
         (out) = i;                      \
     } while(0)
 
+#define PARENT(idx) ((idx - 1) / 2)
+#define LEFT_CHILD(idx) (2*idx + 1)
+#define RIGHT_CHILD(idx) (2*idx + 2)
+
+#define IS_LEFT_CHILD(idx) ((idx & 1) == 1)
+#define IS_RIGHT_CHILD(idx) ((idx & 1) == 0)
+
 typedef enum buddy_block_state {
     BUDDY_BLOCK_STATE_FREE = 0,
     BUDDY_BLOCK_STATE_SPLIT = 1,
@@ -98,8 +105,8 @@ static uint64_t split_or_alloc(buddy_physical_block_t *physical_block, uint64_t 
         return INVALID_OFFSET;
     }
 
-    uint64_t left = 2*idx + 1;
-    uint64_t right = 2*idx + 2;
+    uint64_t left = LEFT_CHILD(idx);
+    uint64_t right = RIGHT_CHILD(idx);
 
     if (physical_block->state[left] != BUDDY_BLOCK_STATE_ALLOCATED) {
         uint64_t ret = split_or_alloc(physical_block, size, next_level, left);
@@ -220,7 +227,83 @@ buddy_allocator_alloc(buddy_allocator_t *allocator, uint64_t size)
     return alloc_block;
 }
 
+static void coalesce_or_free(buddy_allocator_t *allocator, buddy_alloc_block_t *alloc_block, uint64_t level, uint64_t idx)
+{
+    // If this is the last level leaf node or an internal node with both children free, mark self as free.
+    if (level + 1 == alloc_block->block->num_levels) {
+        assert(alloc_block->block->state[idx] == BUDDY_BLOCK_STATE_ALLOCATED);
+        alloc_block->block->state[idx] = BUDDY_BLOCK_STATE_FREE;
+    }
+    else if ((alloc_block->block->state[LEFT_CHILD(idx)] == BUDDY_BLOCK_STATE_FREE) &&
+             (alloc_block->block->state[RIGHT_CHILD(idx)] == BUDDY_BLOCK_STATE_FREE)) {
+        assert(alloc_block->block->state[idx] == BUDDY_BLOCK_STATE_SPLIT);
+        alloc_block->block->state[idx] = BUDDY_BLOCK_STATE_FREE;
+    }
+
+    if (idx == 0) {
+        return;
+    }
+
+    assert(level > 0);
+
+    coalesce_or_free(allocator, alloc_block, level - 1, PARENT(idx));    
+}
+
+void buddy_allocator_free(buddy_allocator_t *allocator, buddy_alloc_block_t *alloc_block)
+{
+    if (!allocator || !alloc_block) {
+        assert(0);
+        return;
+    }
+
+    // Find the level of the block.
+    uint64_t level = 0;
+    COMPUTE_LOG2(level, (alloc_block->block->size / alloc_block->size));
+
+    // The start index of every level is 2^level - 1.
+    // 32MB -> 0
+    // 16MB -> 1
+    // 8MB -> 3
+    // 4MB -> 7
+    // 2MB -> 15
+    uint64_t idx = (1ull << level) - 1 + (alloc_block->offset / alloc_block->size);
+
+    assert(alloc_block->block->state[idx] == BUDDY_BLOCK_STATE_ALLOCATED);
+
+    coalesce_or_free(allocator, alloc_block, level, idx);
+
+    free(alloc_block);
+}
+
 uint64_t buddy_allocator_get_total_physical_mem_usage(buddy_allocator_t *allocator)
 {
     return get_total_physical_mem_usage(allocator->mgr);
+}
+
+void buddy_free_physical_blocks(buddy_allocator_t *allocator)
+{
+    if (!allocator) {
+        return;
+    }
+
+    buddy_physical_block_t *current = allocator->blocks;
+    buddy_physical_block_t *next = NULL;
+    buddy_physical_block_t *prev = NULL;
+
+    while (current) {
+        next = current->next;
+        if (current->state[0] == BUDDY_BLOCK_STATE_FREE) {
+            if (current == allocator->blocks) {
+                allocator->blocks = next;
+            }
+            else {
+                prev->next = next;
+            }
+            free_physical_mem(allocator->mgr, current->mem);
+            free(current->state);
+            free(current);
+        }
+        prev = current;
+        current = next;
+    }
 }
