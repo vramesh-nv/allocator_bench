@@ -19,7 +19,6 @@ typedef enum buddy_block_state {
 typedef struct buddy_physical_block {
     physical_mem_t *mem;
     uint64_t size;
-    //CUbitvector *bitmap;
     uint64_t num_levels;
     buddy_block_state_t *state;
     struct buddy_physical_block *next;

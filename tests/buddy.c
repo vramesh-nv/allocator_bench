@@ -363,7 +363,25 @@ static void test_buddy_allocator_stress(void)
     printf("Stress test passed!\n\n");
 }
 
-int main(void) {
+static void test_buddy_allocator_single_level(void)
+{
+    uint64_t alloc_size = 2ull * 1024ull * 1024ull;
+    buddy_allocator_t *allocator = buddy_allocator_create(alloc_size);
+    assert(allocator != NULL);
+    
+    buddy_alloc_block_t *alloc_block = buddy_allocator_alloc(allocator, alloc_size);
+    assert(alloc_block != NULL);
+    assert(buddy_allocator_get_total_physical_mem_usage(allocator) == alloc_size);
+
+    buddy_allocator_free(allocator, alloc_block);
+    buddy_free_physical_blocks(allocator);
+    assert(buddy_allocator_get_total_physical_mem_usage(allocator) == 0);
+
+    buddy_allocator_destroy(allocator);
+}
+
+int main(void)
+{
     printf("Buddy Allocator Test Suite\n");
     printf("===================================\n\n");
     
@@ -379,6 +397,8 @@ int main(void) {
     test_buddy_allocator_mixed_patterns();
     test_buddy_allocator_multiple_blocks();
     test_buddy_allocator_stress();
+
+    test_buddy_allocator_single_level();
     
     printf("All tests passed! ✅\n");
     return 0;
