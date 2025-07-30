@@ -21,6 +21,15 @@
 #define MAP_NORESERVE 0x4000
 #endif
 
+#define COMPUTE_LOG2(out,x)             \
+    do {                                \
+        uint32_t i, j;                  \
+        for (i=0, j=(x); j > 1; i++) {  \
+            j = j >> 1;                 \
+        }                               \
+        (out) = i;                      \
+    } while(0)
+
 // Macro to get parent structure from member pointer
 #define container_of(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))

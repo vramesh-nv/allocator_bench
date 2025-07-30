@@ -1,9 +1,8 @@
 #ifndef BUDDY_H
 #define BUDDY_H
 
-//#include "common.h"
+#include "common.h"
 #include "physical_mem.h"
-#include "bitvector.h"
 
 /*
 * Notes:

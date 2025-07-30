@@ -2,15 +2,6 @@
 
 #define MIN_BLOCK_SIZE (2ull * 1024ull * 1024ull)
 
-#define COMPUTE_LOG2(out,x)             \
-    do {                                \
-        NvU32 i, j;                     \
-        for (i=0, j=(x); j > 1; i++) {  \
-            j = j >> 1;                 \
-        }                               \
-        (out) = i;                      \
-    } while(0)
-
 #define PARENT(idx) ((idx - 1) / 2)
 #define LEFT_CHILD(idx) (2*idx + 1)
 #define RIGHT_CHILD(idx) (2*idx + 2)
@@ -122,6 +113,7 @@ static uint64_t split_or_alloc(buddy_physical_block_t *physical_block, uint64_t 
         if (ret != INVALID_OFFSET) {
             assert(physical_block->state[right] != BUDDY_BLOCK_STATE_FREE);
             physical_block->state[idx] = BUDDY_BLOCK_STATE_SPLIT;
+            assert((physical_block->size / (1ull << next_level)) == (level_size / 2));
             return ret + (physical_block->size / (1ull << next_level));
         }
     }
@@ -191,6 +183,11 @@ buddy_allocator_alloc(buddy_allocator_t *allocator, uint64_t size)
 
     // Allocation request must never exceed the base block size
     assert(size <= allocator->base_block_size);
+    
+    // Size must be aligned to MIN_BLOCK_SIZE and be a power of 2
+    assert(size >= MIN_BLOCK_SIZE);
+    assert(size % MIN_BLOCK_SIZE == 0);
+    assert((size & (size - 1)) == 0); // Power of 2 check
 
     for (buddy_physical_block_t *current = allocator->blocks; current; current = current->next) {
         if (current->state[0] != BUDDY_BLOCK_STATE_ALLOCATED) {
@@ -236,7 +233,7 @@ static void coalesce_or_free(buddy_allocator_t *allocator, buddy_alloc_block_t *
     }
     else if ((alloc_block->block->state[LEFT_CHILD(idx)] == BUDDY_BLOCK_STATE_FREE) &&
              (alloc_block->block->state[RIGHT_CHILD(idx)] == BUDDY_BLOCK_STATE_FREE)) {
-        assert(alloc_block->block->state[idx] == BUDDY_BLOCK_STATE_SPLIT);
+        assert(alloc_block->block->state[idx] != BUDDY_BLOCK_STATE_FREE);
         alloc_block->block->state[idx] = BUDDY_BLOCK_STATE_FREE;
     }
 
@@ -302,8 +299,9 @@ void buddy_free_physical_blocks(buddy_allocator_t *allocator)
             free_physical_mem(allocator->mgr, current->mem);
             free(current->state);
             free(current);
+        } else {
+            prev = current;
         }
-        prev = current;
         current = next;
     }
 }
