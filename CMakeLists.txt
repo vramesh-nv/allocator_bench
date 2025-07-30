@@ -46,6 +46,7 @@ add_library(va_allocator STATIC
     src/va_allocator_default.c
     src/va_allocator_arenas.c
     src/physical_mem.c
+    src/buddy.c
 )
 set_target_properties(va_allocator PROPERTIES 
     LINKER_LANGUAGE C
@@ -85,7 +86,22 @@ target_link_libraries(test_physical_mem PRIVATE
     radix
 )
 
+add_executable(test_buddy
+    tests/buddy.c
+)
+set_target_properties(test_buddy PROPERTIES
+    COMPILE_FLAGS "-g -O0"
+    LINK_FLAGS "-g"
+)
+
+# Link physical memory test with libraries
+target_link_libraries(test_buddy PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
 add_test(NAME sanity_test COMMAND sanity)
 add_test(NAME physical_mem_test COMMAND test_physical_mem) 
+add_test(NAME buddy_test COMMAND test_buddy)
