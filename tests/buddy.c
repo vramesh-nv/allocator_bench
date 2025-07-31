@@ -380,6 +380,67 @@ static void test_buddy_allocator_single_level(void)
     buddy_allocator_destroy(allocator);
 }
 
+// Test buddy allocator mapping functionality with partial mapping
+static void test_buddy_mapping(void)
+{
+    printf("Testing buddy allocator mapping functionality...\n");
+    buddy_allocator_t *allocator = buddy_allocator_create(BASE_BLOCK_SIZE);
+    assert(allocator != NULL);
+
+    uint64_t block_size_2mb = 2ULL * 1024ULL * 1024ULL;
+    uint64_t block_size_4mb = 4ULL * 1024ULL * 1024ULL;
+    uint64_t block_size_8mb = 8ULL * 1024ULL * 1024ULL;
+
+    // Allocate different sized blocks
+    buddy_alloc_block_t *block_2mb = buddy_allocator_alloc(allocator, block_size_2mb);
+    buddy_alloc_block_t *block_4mb = buddy_allocator_alloc(allocator, block_size_4mb);
+    buddy_alloc_block_t *block_8mb = buddy_allocator_alloc(allocator, block_size_8mb);
+    
+    assert(block_2mb != NULL);
+    assert(block_4mb != NULL);
+    assert(block_8mb != NULL);
+    
+    // Map each block to different virtual addresses
+    uint64_t va_base = 0x200000000ULL;
+    uint64_t va_2mb = va_base;
+    uint64_t va_4mb = va_base + 0x100000000ULL;
+    uint64_t va_8mb = va_base + 0x200000000ULL;
+    
+    int result = buddy_map(block_2mb, va_2mb, block_size_2mb);
+    assert(result == 0);
+    printf("  ✓ 2MB block mapped successfully\n");
+    
+    result = buddy_map(block_4mb, va_4mb, block_size_4mb);
+    assert(result == 0);
+    printf("  ✓ 4MB block mapped successfully\n");
+    
+    assert(buddy_map(block_8mb, va_2mb, block_size_8mb) != 0);
+    assert(buddy_map(block_8mb, va_4mb, block_size_8mb) != 0);
+
+    result = buddy_map(block_8mb, va_8mb, block_size_8mb);
+    assert(result == 0);
+    printf("  ✓ 8MB block mapped successfully\n");
+    
+    
+    // Unmap the blocks
+    result = buddy_unmap(block_2mb, va_2mb, block_size_2mb);
+    assert(result == 0);
+    result = buddy_unmap(block_4mb, va_4mb, block_size_4mb);
+    assert(result == 0);
+    result = buddy_unmap(block_8mb, va_8mb, block_size_8mb);
+    assert(result == 0);
+    printf("  ✓ All blocks unmapped successfully\n");
+    
+    // Free the blocks
+    buddy_allocator_free(allocator, block_2mb);
+    buddy_allocator_free(allocator, block_4mb);
+    buddy_allocator_free(allocator, block_8mb);
+    
+    buddy_free_physical_blocks(allocator);
+    buddy_allocator_destroy(allocator);
+    printf("Buddy mapping test passed!\n\n");
+}
+
 int main(void)
 {
     printf("Buddy Allocator Test Suite\n");
@@ -399,6 +460,7 @@ int main(void)
     test_buddy_allocator_stress();
 
     test_buddy_allocator_single_level();
+    test_buddy_mapping();
     
     printf("All tests passed! ✅\n");
     return 0;

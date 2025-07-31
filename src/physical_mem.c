@@ -4,6 +4,7 @@ typedef struct physical_mem physical_mem_t;
 
 typedef struct mapping {
     physical_mem_t *mem;
+    uint64_t offset;
     uint64_t va;
     uint64_t size;
     struct mapping *next;
@@ -94,26 +95,40 @@ void free_physical_mem(physical_mem_mgr_t *mgr, physical_mem_t* mem) {
     }
 }
 
-int map_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
+int map_physical_mem(physical_mem_t* mem, uint64_t offset, uint64_t va, uint64_t size)
 {
     if (mem == NULL || va == 0 || size == 0) {
         return -1;
     }
 
+    // Check bounds: offset + size should not exceed the physical memory size
+    if (offset + size > mem->size) {
+        return -1;
+    }
+
     uint64_t start_va = va;
     uint64_t end_va = va + size;
+    uint64_t start_offset = offset;
+    uint64_t end_offset = offset + size;
     assert(start_va < end_va);
+    assert(start_offset < end_offset);
 
     mapping_t *current = mem->mapping_list;
     while (current) {
-
-        if (start_va >= current->va && start_va < (current->va + current->size)) {
+        // Check for VA range overlap: two ranges [a,b) and [c,d) overlap if a < d && c < b
+        uint64_t current_va_end = current->va + current->size;
+        if (start_va < current_va_end && current->va < end_va) {
+            // VA ranges overlap
             return -1;
         }
 
-        if (end_va >= current->va && end_va < (current->va + current->size)) {
+        // Check for physical memory offset range overlap
+        uint64_t current_offset_end = current->offset + current->size;
+        if (start_offset < current_offset_end && current->offset < end_offset) {
+            // Physical memory ranges overlap
             return -1;
         }
+
         current = current->next;
     }
 
@@ -130,10 +145,27 @@ int map_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
     }
 
     mapping->mem = mem;
+    mapping->offset = offset;
     mapping->va = va;
     mapping->size = size;
-    mapping->next = mem->mapping_list;
-    mem->mapping_list = mapping;
+    
+    // Insert mapping in list sorted by offset
+    if (mem->mapping_list == NULL || mem->mapping_list->offset > offset) {
+        // Insert at the beginning (empty list or new mapping has smallest offset)
+        mapping->next = mem->mapping_list;
+        mem->mapping_list = mapping;
+    } else {
+        // Find the correct position to insert
+        mapping_t *prev = NULL;
+        mapping_t *curr = mem->mapping_list;
+        while (curr != NULL && curr->offset < offset) {
+            prev = curr;
+            curr = curr->next;
+        }
+        // Insert between prev and curr
+        mapping->next = curr;
+        prev->next = mapping;
+    }
 
     return 0;
 }
@@ -172,6 +204,52 @@ int unmap_physical_mem(physical_mem_t* mem, uint64_t va, uint64_t size)
     free(current);
 
     return 0;
+}
+
+int get_mapping_info(physical_mem_t *mem, uint64_t va, uint64_t *offset, uint64_t *size)
+{
+    if (mem == NULL || offset == NULL || size == NULL) {
+        return -1;
+    }
+
+    mapping_t *current = mem->mapping_list;
+    while (current) {
+        if (current->va == va) {
+            *offset = current->offset;
+            *size = current->size;
+            return 0;
+        }
+        current = current->next;
+    }
+
+    return -1; // Mapping not found
+}
+
+int is_range_mapped(physical_mem_t *mem, uint64_t va, uint64_t size)
+{
+    if (mem == NULL || size == 0) {
+        return 0;
+    }
+
+    uint64_t range_start = va;
+    uint64_t range_end = va + size;
+
+    mapping_t *current = mem->mapping_list;
+    while (current) {
+        uint64_t mapping_start = current->va;
+        uint64_t mapping_end = current->va + current->size;
+        
+        // Check if the ranges overlap
+        if (range_start < mapping_end && mapping_start < range_end) {
+            // Check if the entire requested range is covered by this mapping
+            if (mapping_start <= range_start && range_end <= mapping_end) {
+                return 1; // Range is fully mapped
+            }
+        }
+        current = current->next;
+    }
+
+    return 0; // Range is not fully mapped
 }
 
 uint64_t get_total_physical_mem_usage(physical_mem_mgr_t *mgr)

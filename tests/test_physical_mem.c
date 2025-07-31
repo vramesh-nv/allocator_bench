@@ -107,17 +107,17 @@ static void test_memory_mapping(void) {
     uint64_t va3 = TEST_VA_BASE + TEST_BLOCK_SIZE_2MB + TEST_BLOCK_SIZE_4MB;
     
     // Map 2MB portion
-    int ret = map_physical_mem(mem, va1, TEST_BLOCK_SIZE_2MB);
+    int ret = map_physical_mem(mem, 0, va1, TEST_BLOCK_SIZE_2MB);
     assert(ret == 0);
     printf("  ✓ Mapped 2MB at VA 0x%lx\n", va1);
     
     // Map 4MB portion  
-    ret = map_physical_mem(mem, va2, TEST_BLOCK_SIZE_4MB);
+    ret = map_physical_mem(mem, TEST_BLOCK_SIZE_2MB, va2, TEST_BLOCK_SIZE_4MB);
     assert(ret == 0);
     printf("  ✓ Mapped 4MB at VA 0x%lx\n", va2);
     
     // Map 8MB portion
-    ret = map_physical_mem(mem, va3, 8 * 1024 * 1024);
+    ret = map_physical_mem(mem, TEST_BLOCK_SIZE_2MB + TEST_BLOCK_SIZE_4MB, va3, 8 * 1024 * 1024);
     assert(ret == 0);
     printf("  ✓ Mapped 8MB at VA 0x%lx\n", va3);
     
@@ -168,15 +168,15 @@ static void test_error_conditions(void) {
     uint64_t va = TEST_VA_BASE;
     
     // Test invalid parameters for mapping
-    int ret = map_physical_mem(NULL, va, TEST_BLOCK_SIZE_2MB);
+    int ret = map_physical_mem(NULL, 0, va, TEST_BLOCK_SIZE_2MB);
     assert(ret == -1);
     printf("  ✓ map_physical_mem rejects NULL mem\n");
     
-    ret = map_physical_mem(mem, 0, TEST_BLOCK_SIZE_2MB);
+    ret = map_physical_mem(mem, 0, 0, TEST_BLOCK_SIZE_2MB);
     assert(ret == -1);
     printf("  ✓ map_physical_mem rejects NULL VA\n");
     
-    ret = map_physical_mem(mem, va, 0);
+    ret = map_physical_mem(mem, 0, va, 0);
     assert(ret == -1);
     printf("  ✓ map_physical_mem rejects zero size\n");
     
@@ -199,16 +199,16 @@ static void test_error_conditions(void) {
     printf("  ✓ unmap_physical_mem rejects non-existent mapping\n");
     
     // Test valid mapping then double mapping (should fail)
-    ret = map_physical_mem(mem, va, TEST_BLOCK_SIZE_2MB);
+    ret = map_physical_mem(mem, 0, va, TEST_BLOCK_SIZE_2MB);
     assert(ret == 0);
     printf("  ✓ First mapping successful\n");
     
-    ret = map_physical_mem(mem, va, TEST_BLOCK_SIZE_2MB);
+    ret = map_physical_mem(mem, 0, va, TEST_BLOCK_SIZE_2MB);
     assert(ret == -1);
     printf("  ✓ Double mapping correctly rejected\n");
     
     // Test overlapping mapping
-    ret = map_physical_mem(mem, va + 1024*1024, TEST_BLOCK_SIZE_2MB);  // 1MB offset, overlaps
+    ret = map_physical_mem(mem, 0, va + 1024*1024, TEST_BLOCK_SIZE_2MB);  // 1MB offset, overlaps
     assert(ret == -1);
     printf("  ✓ Overlapping mapping correctly rejected\n");
     
@@ -289,7 +289,7 @@ static void test_granular_mapping_pattern(void) {
     uint64_t mappings_2mb[16];
     for (int i = 0; i < 16; i++) {
         mappings_2mb[i] = current_va;
-        int ret = map_physical_mem(mem, current_va, TEST_BLOCK_SIZE_2MB);
+        int ret = map_physical_mem(mem, i * TEST_BLOCK_SIZE_2MB, current_va, TEST_BLOCK_SIZE_2MB);
         assert(ret == 0);
         current_va += TEST_BLOCK_SIZE_2MB;
     }
@@ -340,6 +340,174 @@ static void test_granular_mapping_pattern(void) {
     printf("Granular mapping pattern test passed!\n\n");
 }
 
+// Test partial mapping functionality  
+static void test_partial_mapping(void) {
+    printf("Testing partial mapping functionality...\n");
+    
+    physical_mem_mgr_t *mgr = physical_mem_mgr_create();
+    assert(mgr != NULL);
+    
+    // Allocate a 32MB physical block
+    physical_mem_t *mem = allocate_physical_mem(mgr, TEST_BLOCK_SIZE_32MB);
+    assert(mem != NULL);
+    
+    // Test partial mapping - map 4MB starting at offset 8MB
+    uint64_t va1 = TEST_VA_BASE;
+    uint64_t offset1 = 8ULL * 1024 * 1024;  // 8MB offset
+    uint64_t size1 = TEST_BLOCK_SIZE_4MB;   // 4MB size
+    
+    int result = map_physical_mem(mem, offset1, va1, size1);
+    assert(result == 0);
+    printf("  ✓ Partial mapping (4MB at offset 8MB) successful\n");
+    
+    // Verify mapping info
+    uint64_t retrieved_offset, retrieved_size;
+    result = get_mapping_info(mem, va1, &retrieved_offset, &retrieved_size);
+    assert(result == 0);
+    assert(retrieved_offset == offset1);
+    assert(retrieved_size == size1);
+    printf("  ✓ Mapping info retrieval works correctly\n");
+    
+    // Test another partial mapping - map 2MB starting at offset 16MB
+    uint64_t va2 = TEST_VA_BASE + 0x100000000ULL; // Different VA
+    uint64_t offset2 = 16ULL * 1024 * 1024;       // 16MB offset
+    uint64_t size2 = TEST_BLOCK_SIZE_2MB;         // 2MB size
+    
+    result = map_physical_mem(mem, offset2, va2, size2);
+    assert(result == 0);
+    printf("  ✓ Second partial mapping (2MB at offset 16MB) successful\n");
+    
+    // Test range mapping check
+    assert(is_range_mapped(mem, va1, size1) == 1);
+    assert(is_range_mapped(mem, va2, size2) == 1);
+    assert(is_range_mapped(mem, TEST_VA_BASE + 0x200000000ULL, size1) == 0);
+    printf("  ✓ Range mapping checks work correctly\n");
+    
+    // Test bounds validation
+    uint64_t invalid_offset = 30ULL * 1024 * 1024; // 30MB offset
+    uint64_t invalid_size = TEST_BLOCK_SIZE_4MB;    // 4MB size (30+4 > 32)
+    result = map_physical_mem(mem, invalid_offset, TEST_VA_BASE + 0x300000000ULL, invalid_size);
+    assert(result == -1); // Should fail due to bounds
+    printf("  ✓ Bounds validation works correctly\n");
+    
+    // Test overlapping VA mapping
+    result = map_physical_mem(mem, 0, va1, size1); // Same VA, different offset
+    assert(result == -1); // Should fail due to VA overlap
+    printf("  ✓ VA overlap detection works correctly\n");
+    
+    // Test overlapping physical memory mapping
+    uint64_t va3 = TEST_VA_BASE + 0x400000000ULL; // Different VA
+    
+    // Try to map same physical memory range (8MB-12MB) to different VA - should fail
+    result = map_physical_mem(mem, offset1, va3, size1); // Same offset and size as first mapping
+    assert(result == -1); // Should fail due to physical memory overlap
+    printf("  ✓ Exact physical memory overlap detection works correctly\n");
+    
+    // Try to map partially overlapping physical memory (10MB-14MB overlaps with 8MB-12MB) - should fail
+    uint64_t partial_offset = 10ULL * 1024 * 1024; // 10MB offset
+    result = map_physical_mem(mem, partial_offset, va3, size1); // 10MB-14MB range
+    assert(result == -1); // Should fail due to partial physical memory overlap
+    printf("  ✓ Partial physical memory overlap detection works correctly\n");
+    
+    // Try to map physical memory that overlaps with second mapping (15MB-17MB overlaps with 16MB-18MB) - should fail
+    uint64_t overlap_offset2 = 15ULL * 1024 * 1024; // 15MB offset
+    result = map_physical_mem(mem, overlap_offset2, va3, size2); // 15MB-17MB range
+    assert(result == -1); // Should fail due to physical memory overlap with second mapping
+    printf("  ✓ Physical memory overlap with second mapping detection works correctly\n");
+    
+    // Clean up
+    result = unmap_physical_mem(mem, va1, size1);
+    assert(result == 0);
+    result = unmap_physical_mem(mem, va2, size2);
+    assert(result == 0);
+    
+    free_physical_mem(mgr, mem);
+    physical_mem_mgr_destroy(mgr);
+    printf("Partial mapping test passed!\n\n");
+}
+
+// Test backward compatibility
+static void test_backward_compatibility(void) {
+    printf("Testing backward compatibility...\n");
+    
+    physical_mem_mgr_t *mgr = physical_mem_mgr_create();
+    assert(mgr != NULL);
+    
+    physical_mem_t *mem = allocate_physical_mem(mgr, TEST_BLOCK_SIZE_32MB);
+    assert(mem != NULL);
+    
+    // Old API should still work (maps from offset 0)
+    int result = map_physical_mem(mem, 0, TEST_VA_BASE, TEST_BLOCK_SIZE_32MB);
+    assert(result == 0);
+    
+    // Verify it mapped from offset 0
+    uint64_t offset, size;
+    result = get_mapping_info(mem, TEST_VA_BASE, &offset, &size);
+    assert(result == 0);
+    assert(offset == 0);
+    assert(size == TEST_BLOCK_SIZE_32MB);
+    
+    printf("  ✓ Backward compatibility maintained\n");
+    
+    result = unmap_physical_mem(mem, TEST_VA_BASE, TEST_BLOCK_SIZE_32MB);
+    assert(result == 0);
+    
+    free_physical_mem(mgr, mem);
+    physical_mem_mgr_destroy(mgr);
+    printf("Backward compatibility test passed!\n\n");
+}
+
+// Test complex partial mapping scenarios
+static void test_complex_partial_mapping(void) {
+    printf("Testing complex partial mapping scenarios...\n");
+    
+    physical_mem_mgr_t *mgr = physical_mem_mgr_create();
+    assert(mgr != NULL);
+    
+    physical_mem_t *mem = allocate_physical_mem(mgr, TEST_BLOCK_SIZE_32MB);
+    assert(mem != NULL);
+    
+    // Map multiple non-overlapping partial regions
+    struct {
+        uint64_t va;
+        uint64_t offset;
+        uint64_t size;
+    } mappings[] = {
+        {TEST_VA_BASE,                     0,  TEST_BLOCK_SIZE_2MB},  // First 2MB
+        {TEST_VA_BASE + 0x100000000ULL,   4ULL * 1024 * 1024, TEST_BLOCK_SIZE_4MB},  // 4MB at 4MB offset
+        {TEST_VA_BASE + 0x200000000ULL,   16ULL * 1024 * 1024, TEST_BLOCK_SIZE_2MB}, // 2MB at 16MB offset
+        {TEST_VA_BASE + 0x300000000ULL,   28ULL * 1024 * 1024, TEST_BLOCK_SIZE_4MB}  // 4MB at 28MB offset
+    };
+    
+    // Create all mappings
+    for (int i = 0; i < 4; i++) {
+        int result = map_physical_mem(mem, mappings[i].offset, mappings[i].va, mappings[i].size);
+        assert(result == 0);
+    }
+    printf("  ✓ Multiple partial mappings created successfully\n");
+    
+    // Verify all mappings
+    for (int i = 0; i < 4; i++) {
+        uint64_t offset, size;
+        int result = get_mapping_info(mem, mappings[i].va, &offset, &size);
+        assert(result == 0);
+        assert(offset == mappings[i].offset);
+        assert(size == mappings[i].size);
+    }
+    printf("  ✓ All mappings verified correctly\n");
+    
+    // Clean up all mappings
+    for (int i = 0; i < 4; i++) {
+        int result = unmap_physical_mem(mem, mappings[i].va, mappings[i].size);
+        assert(result == 0);
+    }
+    printf("  ✓ All mappings cleaned up successfully\n");
+    
+    free_physical_mem(mgr, mem);
+    physical_mem_mgr_destroy(mgr);
+    printf("Complex partial mapping test passed!\n\n");
+}
+
 int main(void) {
     printf("Physical Memory Interface Test Suite\n");
     printf("===================================\n\n");
@@ -351,6 +519,11 @@ int main(void) {
     test_resource_limits();
     test_granular_mapping_pattern();
     
+    // New partial mapping tests
+    test_partial_mapping();
+    test_backward_compatibility();
+    test_complex_partial_mapping();
+    
     printf("All physical memory tests passed successfully!\n");
     printf("\nTest Summary:\n");
     printf("- Manager lifecycle: creation, destruction, NULL handling\n");
@@ -359,6 +532,9 @@ int main(void) {
     printf("- Error condition handling and parameter validation\n");
     printf("- Resource limit enforcement\n");
     printf("- Granular mapping patterns for buddy allocator usage\n");
+    printf("- Partial mapping with offset support\n");
+    printf("- Backward compatibility with existing mapping API\n");
+    printf("- Complex partial mapping scenarios\n");
     
     return 0;
 } 

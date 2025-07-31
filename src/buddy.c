@@ -271,6 +271,30 @@ void buddy_allocator_free(buddy_allocator_t *allocator, buddy_alloc_block_t *all
     free(alloc_block);
 }
 
+// Mapping functions for buddy allocated blocks
+int buddy_map(buddy_alloc_block_t *alloc_block, uint64_t va, uint64_t size)
+{
+    if (!alloc_block || !alloc_block->block || !alloc_block->block->mem || !va) {
+        return -1;
+    }
+
+    assert(size == alloc_block->size);
+
+    // Use partial mapping to map only the allocated portion
+    return map_physical_mem(alloc_block->block->mem, alloc_block->offset, va, size);
+}
+
+int buddy_unmap(buddy_alloc_block_t *alloc_block, uint64_t va, uint64_t size)
+{
+    if (!alloc_block || !alloc_block->block || !alloc_block->block->mem) {
+        return -1;
+    }
+
+    assert(size == alloc_block->size);
+
+    return unmap_physical_mem(alloc_block->block->mem, va, size);
+}
+
 uint64_t buddy_allocator_get_total_physical_mem_usage(buddy_allocator_t *allocator)
 {
     return get_total_physical_mem_usage(allocator->mgr);

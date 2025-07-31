@@ -23,6 +23,10 @@ void buddy_allocator_destroy(buddy_allocator_t *allocator);
 buddy_alloc_block_t *buddy_allocator_alloc(buddy_allocator_t *allocator, uint64_t size);
 void buddy_allocator_free(buddy_allocator_t *allocator, buddy_alloc_block_t *alloc_block);
 
+// Mapping functions for buddy allocated blocks
+int buddy_map(buddy_alloc_block_t *alloc_block, uint64_t va, uint64_t size);
+int buddy_unmap(buddy_alloc_block_t *alloc_block, uint64_t va, uint64_t size);
+
 void buddy_free_physical_blocks(buddy_allocator_t *allocator);
 uint64_t buddy_allocator_get_total_physical_mem_usage(buddy_allocator_t *allocator);
 

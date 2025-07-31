@@ -11,9 +11,12 @@ void physical_mem_mgr_destroy(physical_mem_mgr_t *mgr);
 
 physical_mem_t *allocate_physical_mem(physical_mem_mgr_t *mgr, uint64_t size);
 void free_physical_mem(physical_mem_mgr_t *mgr, physical_mem_t *mem);
-int map_physical_mem(physical_mem_t *mem, uint64_t va, uint64_t size);
+
+int map_physical_mem(physical_mem_t *mem, uint64_t offset, uint64_t va, uint64_t size);
 int unmap_physical_mem(physical_mem_t *mem, uint64_t va, uint64_t size);
 
+int get_mapping_info(physical_mem_t *mem, uint64_t va, uint64_t *offset, uint64_t *size);
+int is_range_mapped(physical_mem_t *mem, uint64_t va, uint64_t size);
 uint64_t get_total_physical_mem_usage(physical_mem_mgr_t *mgr);
 
 #endif

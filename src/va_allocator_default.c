@@ -106,7 +106,7 @@ static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_
         assert(ret == 0);
 
         uint64_t new_va = best_fit->start_addr + (best_fit->block_range.low_idx + num_remaps) * PHYSICAL_BLOCK_SIZE;
-        ret = map_physical_mem(default_impl->physical_blocks[i], new_va, PHYSICAL_BLOCK_SIZE);
+        ret = map_physical_mem(default_impl->physical_blocks[i], 0, new_va, PHYSICAL_BLOCK_SIZE);
         assert(ret == 0);
 
         default_impl->physical_blocks[best_fit->block_range.low_idx + num_remaps] = default_impl->physical_blocks[i];
@@ -122,7 +122,7 @@ static uint64_t va_block_back_with_physical_mem(va_allocator_default_t *default_
                 return 0;
             }
             uint64_t map_va = best_fit->start_addr + (i - best_fit->block_range.low_idx) * PHYSICAL_BLOCK_SIZE;
-            ret = map_physical_mem(default_impl->physical_blocks[i], map_va, PHYSICAL_BLOCK_SIZE);
+            ret = map_physical_mem(default_impl->physical_blocks[i], 0, map_va, PHYSICAL_BLOCK_SIZE);
             assert(ret == 0);
         }
         default_impl->ref_count[i]++;
