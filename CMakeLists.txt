@@ -100,8 +100,23 @@ target_link_libraries(test_buddy PRIVATE
     radix
 )
 
+add_executable(test_arena_alloc
+    tests/arena_alloc.c
+)
+set_target_properties(test_arena_alloc PROPERTIES
+    COMPILE_FLAGS "-g -O0"
+    LINK_FLAGS "-g"
+)
+
+# Link physical memory test with libraries
+target_link_libraries(test_arena_alloc PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
 add_test(NAME sanity_test COMMAND sanity)
 add_test(NAME physical_mem_test COMMAND test_physical_mem) 
 add_test(NAME buddy_test COMMAND test_buddy)
+add_test(NAME arena_alloc_test COMMAND test_arena_alloc)

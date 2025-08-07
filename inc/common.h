@@ -21,6 +21,9 @@
 #define MAP_NORESERVE 0x4000
 #endif
 
+#define CUOS_ROUND_DOWN_2(p, a) ((a) == 0 ? (p) : ((p) & ~((a) - 1)))
+#define CUOS_ROUND_UP_2(p, a) (CUOS_ROUND_DOWN_2((p) + (a) - 1, a))
+
 #define COMPUTE_LOG2(out,x)             \
     do {                                \
         uint32_t i, j;                  \

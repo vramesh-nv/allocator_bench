@@ -3,6 +3,7 @@
 #include "radix.h"
 #include "bitvector.h"
 #include "addrtracker.h"
+#include "buddy.h"
 
 #define NUM_ARENAS 8
 
@@ -18,9 +19,15 @@ typedef struct slab_allocator {
     arena_reservation_t *parent_reservation;
 } slab_allocator_t;
 
+typedef struct block_range {
+    uint64_t low_idx;  // inclusive
+    uint64_t high_idx; // inclusive
+} block_range_t;
+
 typedef struct va_block {
     uint64_t start_addr;         // Starting address of the block
     uint64_t size;               // Size of the block
+    block_range_t block_range;  // Range of physical blocks that the block occupies
     int is_free;                 // Whether the block is free
     struct va_block *addr_next;  // Next block in address-ordered list
     struct va_block *addr_prev;  // Previous block in address-ordered list
@@ -39,6 +46,11 @@ typedef struct arena_reservation {
     CUIaddrTrackerNode node;
     arena_t *parent_arena;
     void *strategy;
+    uint64_t block_size_log2;
+    uint64_t num_blocks;
+    buddy_alloc_block_t **buddy_blocks;
+    uint32_t *ref_count;
+    buddy_allocator_t *buddy_allocator;
     arena_reservation_t *next;
 } arena_reservation_t;
 
@@ -51,6 +63,7 @@ typedef struct arena_reservation {
 typedef struct arena_info {
     uint64_t max_per_alloc_size;
     uint64_t reservation_size;
+    uint64_t backing_memory_block_size;
 } arena_info_t;
 
 typedef struct arena {
@@ -83,14 +96,14 @@ typedef struct {
 // > 32MB -> physical memory size
 //
 arena_info_t arena_info_table[NUM_ARENAS] = {
-    {512UL, 2UL * 1024UL * 1024UL},
-    {1024UL, 2UL * 1024UL * 1024UL},
-    {2048UL, 4UL * 1024UL * 1024UL},
-    {4096UL, 8UL * 1024UL * 1024UL},
-    {64UL * 1024UL, 32UL * 1024UL * 1024UL},
-    {2UL * 1024UL * 1024UL, 64UL * 1024UL * 1024UL},
-    {32UL * 1024UL * 1024UL, 512UL * 1024UL * 1024UL},
-    {~0UL, PHYSICAL_MEMORY_SIZE}
+    {512UL, 2UL * 1024UL * 1024UL, 2UL * 1024UL * 1024UL},
+    {1024UL, 2UL * 1024UL * 1024UL, 2UL * 1024UL * 1024UL},
+    {2048UL, 4UL * 1024UL * 1024UL, 2UL * 1024UL * 1024UL},
+    {4096UL, 8UL * 1024UL * 1024UL, 2UL * 1024UL * 1024UL},
+    {64UL * 1024UL, 32UL * 1024UL * 1024UL, 32UL * 1024UL * 1024UL},
+    {2UL * 1024UL * 1024UL, 64UL * 1024UL * 1024UL, 32UL * 1024UL * 1024UL},
+    {32UL * 1024UL * 1024UL, 512UL * 1024UL * 1024UL, 32UL * 1024UL * 1024UL},
+    {~0UL, PHYSICAL_MEMORY_SIZE, 32UL * 1024UL * 1024UL}
 };
 
 //
@@ -160,7 +173,7 @@ initialize_slab(arena_reservation_t *reservation)
 }
 
 static uint64_t
-allocate_from_slab(slab_allocator_t *sa)
+allocate_from_slab(slab_allocator_t *sa, block_range_t *block_range)
 {
     assert(sa);
     if (sa->free_blocks == 0) {
@@ -174,11 +187,16 @@ allocate_from_slab(slab_allocator_t *sa)
     cubitvectorSetBit(sa->bitmap, bit);
     sa->free_blocks--;
 
-    return (sa->parent_reservation->node.addr + (sa->block_size * bit));
+
+    uint64_t va = sa->parent_reservation->node.addr + (sa->block_size * bit);
+    block_range->low_idx = (va - sa->parent_reservation->addr) >> sa->parent_reservation->block_size_log2;
+    block_range->high_idx = block_range->low_idx;
+
+    return va;
 }
 
 static void
-free_to_slab(slab_allocator_t *sa, uint64_t addr)
+free_to_slab(slab_allocator_t *sa, uint64_t addr, block_range_t *block_range)
 {
     assert(sa);
     assert(addr >= sa->parent_reservation->addr);
@@ -187,6 +205,16 @@ free_to_slab(slab_allocator_t *sa, uint64_t addr)
     uint64_t bit = (addr - sa->parent_reservation->addr) / sa->block_size;
     cubitvectorClearBit(sa->bitmap, bit);
     sa->free_blocks++;
+
+    if (!block_range) {
+        return;
+    }
+
+    uint64_t va = sa->parent_reservation->node.addr + (sa->block_size * bit);
+    block_range->low_idx = (va - sa->parent_reservation->addr) >> sa->parent_reservation->block_size_log2;
+    block_range->high_idx = block_range->low_idx;
+
+    return;
 }
 
 //
@@ -232,7 +260,7 @@ remove_addr_list(obj_allocator_t *oa, va_block_t *block) {
 }
 
 static void
-free_to_obj_allocator(obj_allocator_t *oa, uint64_t addr)
+free_to_obj_allocator(obj_allocator_t *oa, uint64_t addr, block_range_t *block_range)
 {
     assert(oa);
     assert(addr >= oa->parent_reservation->addr);
@@ -244,6 +272,13 @@ free_to_obj_allocator(obj_allocator_t *oa, uint64_t addr)
     }
     if (!block || block->is_free) {
         return;
+    }
+
+    if (block_range) {
+        uint64_t bz = 1ULL << oa->parent_reservation->block_size_log2;
+        uint64_t offset = block->start_addr - oa->parent_reservation->addr;
+        block_range->low_idx = offset / bz;
+        block_range->high_idx = (offset + block->size) % bz != 0 ? (offset + block->size) / bz : (offset + block->size) / bz - 1;
     }
 
     block->is_free = 1;
@@ -270,7 +305,7 @@ free_to_obj_allocator(obj_allocator_t *oa, uint64_t addr)
 }
 
 static uint64_t
-allocate_from_obj_allocator(obj_allocator_t *oa, uint64_t size)
+allocate_from_obj_allocator(obj_allocator_t *oa, uint64_t size, block_range_t *block_range)
 {
     assert(oa);
 
@@ -292,8 +327,16 @@ allocate_from_obj_allocator(obj_allocator_t *oa, uint64_t size)
         new_block->addr_next = NULL;
         new_block->addr_prev = NULL;
 
+        uint64_t bz = 1ULL << oa->parent_reservation->block_size_log2;
+        uint64_t offset = new_block->start_addr - oa->parent_reservation->addr;
+        new_block->block_range.low_idx = offset / bz;
+        new_block->block_range.high_idx = best_fit->block_range.high_idx;
+
         // Update the best fit block's size to reflect this split
         best_fit->size = size;
+        offset = best_fit->start_addr - oa->parent_reservation->addr;
+        best_fit->block_range.high_idx = (offset + best_fit->size) % bz != 0 ? (offset + best_fit->size) / bz : (offset + best_fit->size) / bz - 1;
+
         insert_addr_list(oa, new_block);
         radixTreeInsert(&oa->size_tree, &new_block->radix_node, new_block->size);
     }
@@ -301,6 +344,7 @@ allocate_from_obj_allocator(obj_allocator_t *oa, uint64_t size)
     // Mark the best fit block as in use
     best_fit->is_free = 0;
     radixTreeRemove(&best_fit->radix_node);
+    *block_range = best_fit->block_range;
     return best_fit->start_addr;
 }
 
@@ -344,7 +388,9 @@ initialize_obj_allocator(arena_reservation_t *reservation)
     block->size = reservation->size;
     block->is_free = 1;
     block->addr_next = NULL;
-    block->addr_prev = NULL;  
+    block->addr_prev = NULL;
+    block->block_range.low_idx = 0;
+    block->block_range.high_idx = reservation->num_blocks - 1;
     oa->addr_list = block;
 
     radixTreeInsert(&oa->size_tree, &block->radix_node, block->size);
@@ -399,9 +445,41 @@ create_reservation(arena_t *arena)
     reservation->size = arena->info.reservation_size;
     reservation->parent_arena = arena;
 
+    COMPUTE_LOG2(reservation->block_size_log2, arena->info.backing_memory_block_size);
+
+
+    reservation->num_blocks = arena->info.reservation_size / arena->info.backing_memory_block_size;
+
+    reservation->buddy_allocator = buddy_allocator_create(arena->info.backing_memory_block_size);
+    if (!reservation->buddy_allocator) {
+        FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
+        free(reservation);
+        return NULL;
+    }
+
+    reservation->buddy_blocks = (buddy_alloc_block_t **)calloc(reservation->num_blocks, sizeof(*reservation->buddy_blocks));
+    if (!reservation->buddy_blocks) {
+        buddy_allocator_destroy(reservation->buddy_allocator);
+        FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
+        free(reservation);
+        return NULL;
+    }
+
+    reservation->ref_count = (uint32_t *)calloc(reservation->num_blocks, sizeof(*reservation->ref_count));
+    if (!reservation->ref_count) {
+        buddy_allocator_destroy(reservation->buddy_allocator);
+        free(reservation->buddy_blocks);
+        FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
+        free(reservation);
+        return NULL;
+    }
+
     void *strategy = (arena->is_slab) ? (void *)initialize_slab(reservation) 
                                       : (void *)initialize_obj_allocator(reservation);
     if (!strategy) {
+        buddy_allocator_destroy(reservation->buddy_allocator);
+        free(reservation->buddy_blocks);
+        free(reservation->ref_count);
         FREE_VA(UINT2PTR(addr), arena->info.reservation_size);
         free(reservation);
         return NULL;
@@ -414,6 +492,93 @@ create_reservation(arena_t *arena)
     return reservation;
 }
 
+static int
+back_with_buddy_allocator(arena_reservation_t *reservation, block_range_t block_range)
+{
+    uint64_t ret = 0;
+    uint64_t first_unbacked_idx = UINT64_MAX;
+    uint64_t num_unbacked = 0;
+    uint64_t bz = 1ULL << reservation->block_size_log2;
+
+    for (uint64_t i = block_range.low_idx; i <= block_range.high_idx; i++) {
+        if (reservation->buddy_blocks[i] == NULL) {
+            if (first_unbacked_idx == UINT64_MAX) {
+                first_unbacked_idx = i;
+            }
+            num_unbacked++;
+        }
+    }
+
+    // No unbacked blocks.
+    /*if (num_unbacked == 0) {
+        assert(first_unbacked_idx == UINT64_MAX);
+        return 0;
+    }
+
+    assert(first_unbacked_idx >= block_range.low_idx);
+    assert(first_unbacked_idx <= block_range.high_idx);*/
+
+    uint64_t unbacked_idx = first_unbacked_idx;
+
+    for (uint64_t i = 0; i < reservation->num_blocks && num_unbacked > 0; i++) {
+        if (i >= block_range.low_idx && i <= block_range.high_idx) {
+            continue;
+        }
+
+        if (!reservation->buddy_blocks[i] || reservation->ref_count[i] > 0) {
+            continue;
+        }
+
+        uint64_t old_va = reservation->addr + i * bz;
+        ret = buddy_unmap(reservation->buddy_blocks[i], old_va, bz);
+        assert(ret == 0);
+
+        reservation->buddy_blocks[unbacked_idx] = reservation->buddy_blocks[i];
+        reservation->buddy_blocks[i] = NULL;
+        reservation->ref_count[i] = 0;
+
+        uint64_t new_va = reservation->addr + unbacked_idx * bz;
+        ret = buddy_map(reservation->buddy_blocks[unbacked_idx], new_va, bz);
+        assert(ret == 0);
+
+        num_unbacked--;
+
+        if (num_unbacked == 0) {
+            break;
+        }
+
+        uint64_t j = unbacked_idx + 1;
+        for (; j <= block_range.high_idx; j++) {
+            if (reservation->buddy_blocks[j] == NULL) {
+                break;
+            }
+        }
+        
+        if (j > block_range.high_idx) {
+            break;
+        }
+        unbacked_idx = j;
+    }
+
+    for (uint64_t i = block_range.low_idx; i <= block_range.high_idx; i++) {
+        if (reservation->buddy_blocks[i] == NULL) {
+            assert(reservation->ref_count[i] == 0);
+
+            reservation->buddy_blocks[i] = buddy_allocator_alloc(reservation->buddy_allocator, bz);
+            if (!reservation->buddy_blocks[i]) {
+                return -1;
+            }
+
+            uint64_t va = reservation->addr + i * bz;
+            ret = buddy_map(reservation->buddy_blocks[i], va, bz);
+            assert(ret == 0);
+        }
+        reservation->ref_count[i]++;
+    }
+
+    return 0;
+}
+
 static uint64_t
 allocate_from_reservation(arena_reservation_t *reservation, uint64_t size)
 {
@@ -421,12 +586,27 @@ allocate_from_reservation(arena_reservation_t *reservation, uint64_t size)
     if (!reservation) {
         return 0;
     }
+    block_range_t block_range;
     if (reservation->parent_arena->is_slab) {
         // Slab allocation
-        addr = allocate_from_slab((slab_allocator_t *)reservation->strategy);
+        addr = allocate_from_slab((slab_allocator_t *)reservation->strategy, &block_range);
     } else {
         // Object allocation
-        addr = allocate_from_obj_allocator((obj_allocator_t *)reservation->strategy, size);
+        addr = allocate_from_obj_allocator((obj_allocator_t *)reservation->strategy, size, &block_range);
+    }
+
+    if (!addr) {
+        return 0;
+    }
+
+    // Try to back with buddy allocator.
+    if (back_with_buddy_allocator(reservation, block_range) != 0) {
+        if (reservation->parent_arena->is_slab) {
+            free_to_slab((slab_allocator_t *)reservation->strategy, addr, NULL);
+        } else {
+            free_to_obj_allocator((obj_allocator_t *)reservation->strategy, addr, NULL);
+        }
+        return 0;
     }
 
     return addr;
@@ -502,14 +682,21 @@ arena_free(void *impl, uint64_t addr)
         return;
     }
 
+    block_range_t block_range;
     arena_reservation_t *reservation = (arena_reservation_t *)node->value;
     if (reservation->parent_arena->is_slab) {
         // Slab allocation
-        free_to_slab((slab_allocator_t *)reservation->strategy, addr);
+        free_to_slab((slab_allocator_t *)reservation->strategy, addr, &block_range);
     } else {
         // Object allocation
-        free_to_obj_allocator((obj_allocator_t *)reservation->strategy, addr);
+        free_to_obj_allocator((obj_allocator_t *)reservation->strategy, addr, &block_range);
     }
+
+    for (uint64_t i = block_range.low_idx; i <= block_range.high_idx; i++) {
+        assert(reservation->ref_count[i] > 0);
+        reservation->ref_count[i]--;
+    }
+
     arena_impl->used_va_size -= node->size;
     return;
 }
