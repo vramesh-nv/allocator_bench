@@ -762,6 +762,32 @@ arena_flush(void *impl)
     UNUSED(impl);
 }
 
+static uint64_t
+arena_get_physical_mem_usage(void *impl)
+{
+    va_allocator_arenas_t *arena_impl = (va_allocator_arenas_t *)impl;
+    if (!arena_impl) {
+        return 0;
+    }
+    
+    uint64_t total_usage = 0;
+    
+    // Iterate through all arenas and their reservations
+    for (uint32_t i = 0; i < NUM_ARENAS; i++) {
+        arena_t *arena = &arena_impl->arenas[i];
+        arena_reservation_t *reservation = arena->reservation_head;
+        
+        while (reservation) {
+            if (reservation->buddy_allocator) {
+                total_usage += buddy_allocator_get_total_physical_mem_usage(reservation->buddy_allocator);
+            }
+            reservation = reservation->next;
+        }
+    }
+    
+    return total_usage;
+}
+
 // Function to get the default implementation operations
 va_allocator_ops_t *
 get_arena_allocator_ops(void)
@@ -774,6 +800,7 @@ get_arena_allocator_ops(void)
         .print = arena_allocator_print,
         .destroy = arena_destroy,
         .flush = arena_flush,
+        .get_physical_mem_usage = arena_get_physical_mem_usage,
         .impl = NULL
     };
     return &ops;

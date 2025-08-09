@@ -114,9 +114,25 @@ target_link_libraries(test_arena_alloc PRIVATE
     radix
 )
 
+# Add simple benchmark test
+add_executable(simple_benchmark
+    tests/simple_benchmark.c
+)
+set_target_properties(simple_benchmark PROPERTIES
+    COMPILE_FLAGS "-g -O2"
+    LINK_FLAGS "-g"
+)
+
+# Link simple benchmark with libraries
+target_link_libraries(simple_benchmark PRIVATE
+    va_allocator
+    radix
+)
+
 # Enable testing
 enable_testing()
 add_test(NAME sanity_test COMMAND sanity)
 add_test(NAME physical_mem_test COMMAND test_physical_mem) 
 add_test(NAME buddy_test COMMAND test_buddy)
 add_test(NAME arena_alloc_test COMMAND test_arena_alloc)
+add_test(NAME simple_benchmark_test COMMAND simple_benchmark)

@@ -100,7 +100,7 @@ va_flush(va_allocator_t *allocator) {
 
 uint64_t
 get_physical_mem_usage(va_allocator_t *allocator) {
-    if (!allocator) {
+    if (!allocator || !allocator->ops || !allocator->ops->get_physical_mem_usage) {
         return 0;
     }
     return allocator->ops->get_physical_mem_usage(allocator->ops->impl);

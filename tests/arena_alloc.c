@@ -37,7 +37,7 @@ static void test_arena_alloc_sizes()
     uint64_t max_alloc_size = 1ULL << 26;
     uint64_t num_sizes = 0;
     COMPUTE_LOG2(num_sizes, max_alloc_size/min_alloc_size);
-    uint64_t num_allocs_per_size = 1;
+    uint64_t num_allocs_per_size = 32;
 
     uint64_t *addrs = (uint64_t *)calloc(num_sizes * num_allocs_per_size, sizeof(uint64_t));
     assert(addrs != NULL);
