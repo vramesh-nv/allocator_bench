@@ -1,6 +1,6 @@
-# VA Allocator
+# Mempool Allocator Comparision
 
-A high-performance virtual address (VA) allocator implementation with multiple allocation strategies for memory management.
+Memory pool allocator implementation with multiple allocation strategies for memory management.
 
 ## Overview
 
@@ -27,11 +27,11 @@ VA Allocator Interface
 ├── DEFAULT Implementation
 │   ├── Radix tree for size ordering
 │   ├── Address-ordered block lists
-│   └── Physical memory manager
+│   └── Simple Physical memory allocator
 └── ARENA Implementation
     ├── Size-based arena selection
     ├── Slab allocators for small blocks
-    └── Buddy allocator backing
+    └── Buddy allocator backing on top of the physical memory allocator
 ```
 
 ## Performance
@@ -95,7 +95,3 @@ va_allocator_destroy(allocator);
 
 - [Simple Benchmark](SIMPLE_BENCHMARK.md) - Performance comparison guide
 - Source code comments provide implementation details
-
-## License
-
-This is a prototype implementation for research and development purposes.
